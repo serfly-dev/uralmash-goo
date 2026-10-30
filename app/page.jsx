@@ -1,0 +1,3 @@
+export default function Home() {
+  return <main className="shell"><header className="brand"><img src="/logo-reference.png" alt="Уралмаш ГОО"/><span>Уралмаш ГОО</span></header><section><p className="eyebrow">ПРОЕКТ САЙТА</p><h1>Основа нового сайта<br/>Уралмаш ГОО</h1><p className="lead">Первичная настройка завершена. Административная панель доступна для входа.</p><div className="status"><span className="dot"/>Веб-приложение запущено</div><p><a className="admin-entry" href="/admin/login">Перейти к входу в админ-панель →</a></p></section><footer>React · Next.js · Express · SQLite</footer></main>;
+}

@@ -1,0 +1,233 @@
+{
+  "meta": {
+    "name": "Уралмаш ГОО",
+    "description": "Сдержанная система для B2B-каталога горно-обогатительного оборудования",
+    "version": "1.0.0",
+    "created": "2026-10-30",
+    "personality": "Фирменный синий логотипа сочетается с холодными нейтральными поверхностями. Техническая информация организована в ясную, спокойную структуру."
+  },
+  "colors": {
+    "primary": {
+      "value": "#293580",
+      "usage": "Основные действия, ссылки и фирменные поверхности"
+    },
+    "primary-hover": {
+      "value": "#1D285F",
+      "usage": "Состояние наведения основной кнопки"
+    },
+    "secondary": {
+      "value": "#E7EAF2",
+      "usage": "Подложка второстепенных элементов"
+    },
+    "accent": {
+      "value": "#8C98C5",
+      "usage": "Декоративный фирменный акцент, не для мелкого текста"
+    },
+    "background": {
+      "value": "#F4F5F7",
+      "usage": "Фон страницы"
+    },
+    "surface": {
+      "value": "#FFFFFF",
+      "usage": "Карточки и поля"
+    },
+    "surface-elevated": {
+      "value": "#FFFFFF",
+      "usage": "Меню и диалоги"
+    },
+    "border": {
+      "value": "#CFD4DF",
+      "usage": "Разделители и границы"
+    },
+    "text-primary": {
+      "value": "#1D2639",
+      "usage": "Основной текст"
+    },
+    "text-secondary": {
+      "value": "#515E72",
+      "usage": "Второстепенный текст и подписи"
+    },
+    "text-on-primary": {
+      "value": "#FFFFFF",
+      "usage": "Текст на фирменном синем"
+    },
+    "success": {
+      "value": "#276044",
+      "usage": "Текст успешного состояния на белом"
+    },
+    "warning": {
+      "value": "#805400",
+      "usage": "Текст предупреждения на белом"
+    },
+    "error": {
+      "value": "#A52C32",
+      "usage": "Текст ошибки на белом"
+    },
+    "info": {
+      "value": "#293580",
+      "usage": "Информационные сообщения на белом"
+    },
+    "focus": {
+      "value": "#315FD0",
+      "usage": "Видимая обводка фокуса"
+    }
+  },
+  "typography": {
+    "font-display": {
+      "family": "Manrope",
+      "fallback": "Arial, sans-serif",
+      "source": "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap"
+    },
+    "font-body": {
+      "family": "IBM Plex Sans",
+      "fallback": "Arial, sans-serif",
+      "source": "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap"
+    },
+    "font-mono": {
+      "family": "IBM Plex Mono",
+      "fallback": "monospace",
+      "source": "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap"
+    },
+    "scale": {
+      "xs": {
+        "size": "0.75rem",
+        "lineHeight": "1.125rem",
+        "usage": "Служебные подписи"
+      },
+      "sm": {
+        "size": "0.875rem",
+        "lineHeight": "1.25rem",
+        "usage": "Подписи и характеристики"
+      },
+      "base": {
+        "size": "1rem",
+        "lineHeight": "1.5rem",
+        "usage": "Основной текст"
+      },
+      "lg": {
+        "size": "1.125rem",
+        "lineHeight": "1.625rem",
+        "usage": "Вводный текст"
+      },
+      "xl": {
+        "size": "1.25rem",
+        "lineHeight": "1.75rem",
+        "usage": "Названия карточек"
+      },
+      "2xl": {
+        "size": "1.5rem",
+        "lineHeight": "2rem",
+        "usage": "Подзаголовки"
+      },
+      "3xl": {
+        "size": "2rem",
+        "lineHeight": "2.5rem",
+        "usage": "Заголовки разделов"
+      },
+      "4xl": {
+        "size": "3rem",
+        "lineHeight": "3.25rem",
+        "usage": "Главный заголовок"
+      }
+    },
+    "weights": {
+      "normal": 400,
+      "medium": 500,
+      "semibold": 600,
+      "bold": 700
+    }
+  },
+  "spacing": {
+    "base-unit": "4px",
+    "scale": {
+      "0": "0",
+      "1": "0.25rem",
+      "2": "0.5rem",
+      "3": "0.75rem",
+      "4": "1rem",
+      "5": "1.25rem",
+      "6": "1.5rem",
+      "8": "2rem",
+      "10": "2.5rem",
+      "12": "3rem",
+      "16": "4rem",
+      "20": "5rem"
+    }
+  },
+  "borders": {
+    "radius": {
+      "none": "0",
+      "sm": "4px",
+      "md": "8px",
+      "lg": "12px",
+      "xl": "16px",
+      "full": "9999px"
+    },
+    "width": {
+      "default": "1px",
+      "thick": "2px"
+    }
+  },
+  "shadows": {
+    "sm": {
+      "value": "0 2px 8px rgba(29, 38, 57, 0.06)",
+      "usage": "Небольшое поднятие"
+    },
+    "md": {
+      "value": "0 8px 24px rgba(29, 38, 57, 0.10)",
+      "usage": "Выпадающие меню"
+    },
+    "lg": {
+      "value": "0 20px 48px rgba(29, 38, 57, 0.16)",
+      "usage": "Диалоги"
+    },
+    "glow": {
+      "value": null,
+      "usage": "Не используется"
+    }
+  },
+  "effects": {
+    "backdrop-blur": null,
+    "glass-opacity": null,
+    "transition-default": "160ms ease",
+    "transition-slow": "280ms ease"
+  },
+  "components": {
+    "button": {
+      "primary": {
+        "bg": "colors.primary",
+        "text": "colors.text-on-primary",
+        "radius": "borders.radius.sm",
+        "padding": "spacing.3 spacing.5"
+      },
+      "secondary": {
+        "bg": "colors.surface",
+        "text": "colors.primary",
+        "border": "colors.primary",
+        "radius": "borders.radius.sm",
+        "padding": "spacing.3 spacing.5"
+      },
+      "ghost": {
+        "bg": "transparent",
+        "text": "colors.primary",
+        "radius": "borders.radius.sm",
+        "padding": "spacing.3 spacing.5"
+      }
+    },
+    "card": {
+      "bg": "colors.surface",
+      "radius": "borders.radius.md",
+      "shadow": "shadows.sm",
+      "padding": "spacing.6",
+      "border": "colors.border"
+    },
+    "input": {
+      "bg": "colors.surface",
+      "border": "colors.border",
+      "radius": "borders.radius.sm",
+      "text": "colors.text-primary",
+      "placeholder": "colors.text-secondary",
+      "focus-ring": "colors.focus"
+    }
+  }
+}
