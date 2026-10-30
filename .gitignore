@@ -1,0 +1,41 @@
+# Dependencies
+/node_modules/
+/.pnp
+.pnp.*
+
+# Next.js and build output
+/.next/
+/out/
+/build/
+/dist/
+/coverage/
+/.vercel/
+/.turbo/
+
+# Local environment files; keep the example config trackable
+.env*
+!.env.example
+
+# Local SQLite databases
+/data/*.sqlite*
+/data/*.db*
+
+# User-uploaded media and local uploads
+/uploads/
+
+# Logs and temporary files
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+*.tmp
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+*.pem
+.idea/
+
+# TypeScript / Next generated files
+*.tsbuildinfo
+/next-env.d.ts
