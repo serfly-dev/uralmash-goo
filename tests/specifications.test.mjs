@@ -22,13 +22,15 @@ test('existing product characteristics enter the common directory without alteri
     const headers = { origin, cookie, 'content-type':'application/json' };
     const payload = { priceRub:50, characteristics:{'Мощность':'до 15 кВт'}, variants:[{slug:'one', priceRub:100, characteristics:{'Масса':10}}] };
     const created = await fetch(`${base}/api/admin/content/products`, {method:'POST',headers,body:JSON.stringify({title:'Товар',slug:'test',payload,published:true})}); assert.equal(created.status,201);
-    const plain = await fetch(`${base}/api/admin/content/products`, {method:'POST',headers,body:JSON.stringify({title:'Без вариантов',slug:'plain',payload:{priceRub:1499000,characteristics:{'Мощность':{min:5,max:10}},variants:[]},published:true})}); assert.equal(plain.status,201);
+    const plain = await fetch(`${base}/api/admin/content/products`, {method:'POST',headers,body:JSON.stringify({title:'Без вариантов',slug:'plain',payload:{priceRub:1499000,priceIsFrom:false,characteristics:{'Мощность':{min:5,max:10}},variants:[]},published:true})}); assert.equal(plain.status,201);
     const plainPage = await fetch(`${base}/api/public/products/plain/variants/default`); assert.equal(plainPage.status,200);
     const plainData = await plainPage.json();
     assert.deepEqual(plainData.variant.characteristics['Мощность'], {min:5,max:10});
     assert.equal(plainData.product.priceFromRub,1499000);
+    assert.equal(plainData.product.priceIsFrom,false);
     assert.equal(plainData.variant.priceRub,1499000);
-    assert.equal((await (await fetch(`${base}/api/public/products/test`)).json()).product.priceFromRub,100);
+    const withVariant = (await (await fetch(`${base}/api/public/products/test`)).json()).product;
+    assert.equal(withVariant.priceFromRub,100); assert.equal(withVariant.priceIsFrom,true);
     for (const [slug, priceRub] of [['zero-price',0], ['no-price',null]]) {
       const added=await fetch(`${base}/api/admin/content/products`, {method:'POST',headers,body:JSON.stringify({title:slug,slug,payload:{priceRub,variants:[]},published:true})}); assert.equal(added.status,201);
       const result=await (await fetch(`${base}/api/public/products/${slug}/variants/default`)).json();

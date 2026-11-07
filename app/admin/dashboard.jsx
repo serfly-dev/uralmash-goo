@@ -232,6 +232,7 @@ function StructuredFields({ section, edit, setEdit, categories, tags, specificat
       <>
         {text('description', 'Описание товара', { multiline: true, help: 'Коротко опишите назначение и основные особенности оборудования.' })}
         {!variants.length && <FormField label="Цена товара, ₽" help="Целое число. Оставьте пустым, если цена уточняется по запросу."><input type="number" min="0" step="1" value={payload.priceRub ?? ''} onChange={(event) => set('priceRub', event.target.value === '' ? null : Number(event.target.value))} /></FormField>}
+        {!variants.length && <label className="check-line"><input type="checkbox" checked={payload.priceIsFrom !== false} onChange={(event) => set('priceIsFrom', event.target.checked)} /><span>Показывать цену с «от»</span></label>}
         <label className="check-line">
           <input type="checkbox" checked={payload.featuredOnHome === true} onChange={(event) => set('featuredOnHome', event.target.checked)} />
           <span><strong>Показывать на главной</strong><small>В блок попадут до шести опубликованных товаров с фото.</small></span>

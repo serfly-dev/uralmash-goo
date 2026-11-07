@@ -128,7 +128,7 @@ export default function ProductPage({ productSlug, variantSlug, initialData }: {
             {category && <p className={ProductPageContentStyles["product-page__category"]}>{category.title}</p>}
             <h1 id="product-title">{product.title}</h1>
             {variant.priceRub != null && (
-              <p className={ProductPageContentStyles["product-page__price"]}>от {formatPrice(variant.priceRub)} ₽</p>
+              <p className={ProductPageContentStyles["product-page__price"]}>{product.priceIsFrom !== false ? 'от ' : ''}{formatPrice(variant.priceRub)} ₽</p>
             )}
             {product.description && <p className={ProductPageContentStyles["product-page__description"]}>{product.description}</p>}
             <RequestButton className={ProductPageContentStyles["product-page__contact"]} intent="purchase" productSlug={product.slug} variantSlug={variant.slug}>Уточнить наличие</RequestButton>

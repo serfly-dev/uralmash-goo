@@ -554,6 +554,7 @@ app.get('/api/admin/overview', requireAdmin, (_req, res) => {
 });
 const contentTypes = new Set(['products','categories','tags','specifications','services','reviews','works','contacts']);
 function validPayload(type,payload){
+  if(type==='products' && payload.priceIsFrom !== undefined && typeof payload.priceIsFrom !== 'boolean') return false;
   if(type==='products' && payload.priceRub != null && (!Number.isSafeInteger(payload.priceRub) || payload.priceRub < 0)) return false;
   if(type==='specifications' && (!['text','number','range'].includes(payload.valueType || 'text') || !['values','range'].includes(payload.filterMode || 'values') || (payload.unit !== undefined && typeof payload.unit !== 'string'))) return false;
   if(type==='products') {
@@ -767,7 +768,7 @@ function serializePublicProduct(row) {
     media:variant.media?.length?variant.media:(payload.media||[]),
     href:`/catalog/product/${row.slug}/${variant.slug}`
   }));
-  return {id:Number(row.id),slug:row.slug,title:row.title,description:payload.description||'',featuredOnHome:payload.featuredOnHome===true,media:payload.media||[],characteristics:payload.characteristics||{},categories:payload.categoryIds||[],tags:payload.tagIds||[],priceFromRub:variants.length?Math.min(...variants.map(v=>v.priceRub)):(payload.priceRub ?? null),variants,sortOrder:row.sort_order,updatedAt:row.updated_at};
+  return {id:Number(row.id),slug:row.slug,title:row.title,description:payload.description||'',featuredOnHome:payload.featuredOnHome===true,media:payload.media||[],characteristics:payload.characteristics||{},categories:payload.categoryIds||[],tags:payload.tagIds||[],priceIsFrom:variants.length > 0 || payload.priceIsFrom !== false,priceFromRub:variants.length?Math.min(...variants.map(v=>v.priceRub)):(payload.priceRub ?? null),variants,sortOrder:row.sort_order,updatedAt:row.updated_at};
 }
 app.get('/api/public/:type', (req,res)=>{if(!contentTypes.has(req.params.type))return res.sendStatus(404);const rows=db.prepare('SELECT id,type,slug,title,payload_json,sort_order,updated_at FROM admin_content WHERE type=? AND published=1 ORDER BY sort_order,id').all(req.params.type);res.json(rows.map(r=>req.params.type==='products'?serializePublicProduct(r):({...r,payload:JSON.parse(r.payload_json)})));});
 app.get('/api/public/products/:productSlug', (req,res)=>{

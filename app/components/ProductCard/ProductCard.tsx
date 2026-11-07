@@ -22,6 +22,7 @@ export type ProductRecord = {
   description?: string;
   featuredOnHome?: boolean;
   priceFromRub?: number | null;
+  priceIsFrom?: boolean;
   media?: ProductMedia[];
   characteristics?: Record<string, CharacteristicValue>;
   categories?: number[];
@@ -69,7 +70,7 @@ export default function ProductCard({ product, category }: ProductCardProps) {
         {category && <span className={ProductCardStyles["featured-product__category"]}>{category.title}</span>}
         <h2 className={ProductCardStyles["featured-product__title"]}>{product.title}</h2>
         <span className={ProductCardStyles["featured-product__link"]}>Подробнее</span>
-        {price != null && <span className={ProductCardStyles["featured-product__price"]}>от {new Intl.NumberFormat('ru-RU').format(price)} ₽</span>}
+        {price != null && <span className={ProductCardStyles["featured-product__price"]}>{product.priceIsFrom !== false ? 'от ' : ''}{new Intl.NumberFormat('ru-RU').format(price)} ₽</span>}
       </div>
     </a>
   );
