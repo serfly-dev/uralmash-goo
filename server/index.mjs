@@ -306,7 +306,7 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.json({ limit: '16kb' }));
+app.use(express.json({ limit: '2mb' }));
 const parseCookies = (header = '') => Object.fromEntries(header.split(';').map((part) => {
   const index = part.indexOf('=');
   if (index < 0) return ['', ''];
@@ -611,7 +611,7 @@ app.get('/api/admin/privacy-policy', requireAdmin, (_req, res) => {
 });
 app.put('/api/admin/privacy-policy', originGuard, requireAdmin, (req, res) => {
   const text = req.body?.text;
-  if (typeof text !== 'string' || !text.trim() || text.length > 12000) return res.status(400).json({ error: 'Укажите текст политики длиной до 12 000 символов.' });
+  if (typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'Укажите текст политики.' });
   const now = new Date().toISOString();
   db.prepare("INSERT INTO admin_content(type,slug,title,payload_json,published,sort_order,created_at,updated_at) VALUES('privacy-policy','privacy-policy','Политика обработки персональных данных',?,1,0,?,?) ON CONFLICT(type,slug) DO UPDATE SET payload_json=excluded.payload_json,published=1,updated_at=excluded.updated_at").run(JSON.stringify({ text: text.trim() }), now, now);
   res.sendStatus(204);

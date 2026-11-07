@@ -517,7 +517,7 @@ function PrivacyPolicySettings() {
   return <form className="editor-card" onSubmit={savePolicy}>
     <div className="editor-card__heading"><h2>Политика обработки персональных данных</h2></div>
     <FormField label="Текст политики" help="Текст будет опубликован на странице политики. Переносы строк сохраняются.">
-      <textarea rows={20} required maxLength={12000} value={text} onChange={(event) => setText(event.target.value)} disabled={!loaded} />
+      <textarea rows={20} required value={text} onChange={(event) => setText(event.target.value)} disabled={!loaded} />
     </FormField>
     {message && <p role="status">{message}</p>}
     <div className="editor-actions"><button className="admin-primary" disabled={loading || !loaded || busy}>{busy ? 'Сохраняем…' : 'Сохранить'}</button></div>
