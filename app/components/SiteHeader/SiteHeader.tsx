@@ -60,7 +60,7 @@ const SiteHeader = forwardRef<HTMLElement, SiteHeaderProps>(function SiteHeader(
       inert={!visible}
     >
       <a className={"hero-brand" + " " + SiteHeaderStyles["hero-brand"]} href="/" aria-label="Уралмаш ГОО — главная">
-        <img src="/logo-reference.png" alt="" />
+        <img src="/logo-header-transparent.png" alt="" />
       </a>
       <nav className={SiteHeaderStyles["continuation-header__nav"]} aria-label="Основная навигация">
         {siteNavigation.map(([label, href]) => {

@@ -36,11 +36,6 @@
 
 .continuation-header :global(.hero-brand) {
   transform: none;
-  mix-blend-mode: multiply;
-}
-
-.continuation-header :global(.hero-brand) img {
-  filter: grayscale(1) contrast(1000%) invert(1);
 }
 
 .continuation-header__nav {
