@@ -16,6 +16,10 @@
 .field-control{min-width:0;display:grid!important;gap:6px!important;font-size:13px!important;font-weight:600!important}
 .field-control>span{color:var(--admin-ink)}
 .field-control>small,.field-help{margin:0;color:var(--admin-muted);font-size:12px;line-height:1.45;font-weight:400}
+.password-input{display:flex;align-items:stretch;gap:8px;min-width:0}
+.password-input input{min-width:0;flex:1}
+.password-input button{flex:0 0 auto;min-height:44px;padding:0 12px;border:1px solid var(--admin-line);border-radius:5px;background:#fff;color:var(--admin-blue);font-size:13px;cursor:pointer}
+.password-input button:hover{background:#f4f5fb}
 .editor-card .field-control input:not([type=checkbox]):not([type=file]),.editor-card .field-control textarea,.editor-card .field-control select{width:100%;min-height:42px;padding:10px 12px;border:1px solid #bac1d0;border-radius:5px;background:#fff;color:var(--admin-ink);font:14px/1.4 'IBM Plex Sans',Arial,sans-serif}
 .editor-card .field-control textarea{min-height:104px;resize:vertical}
 .editor-card .field-control input:focus,.editor-card .field-control textarea:focus,.editor-card .field-control select:focus{border-color:var(--admin-blue);outline:2px solid #29358022}

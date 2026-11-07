@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { authApi } from '../../lib/api';
+import PasswordInput from '../PasswordInput';
 
 export default function AdminLoginPage() {
   const [username, setUsername] = useState('');
@@ -46,7 +47,7 @@ export default function AdminLoginPage() {
         <p className="login-copy">{challenge ? 'Введите шестизначный код из письма. Он действует 10 минут.' : 'Введите учётные данные администратора.'}</p>
         <form onSubmit={submit}>
           {challenge ? <label>Код из письма<input name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required value={code} onChange={(e) => setCode(e.target.value)} /></label> : <><label>Логин<input name="username" autoComplete="username" required value={username} onChange={(e) => setUsername(e.target.value)} /></label>
-          <label>Пароль<input name="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></label></>}
+          <PasswordInput label="Пароль" name="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></>}
           {error && <p className="form-error" role="alert">{error}</p>}
           <button className="admin-primary" disabled={busy}>{busy ? 'Проверяем…' : challenge ? 'Подтвердить код' : 'Войти'}</button>
           {challenge && <button type="button" disabled={busy} onClick={() => { setChallenge(''); setCode(''); setError(''); }}>Войти заново</button>}
