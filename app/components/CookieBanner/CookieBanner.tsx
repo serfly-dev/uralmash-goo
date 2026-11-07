@@ -24,7 +24,7 @@ export default function CookieBanner() {
   }
 
   return <aside className={styles.banner} aria-label="Уведомление о файлах cookie">
-    <p>На сайте используются файлы cookie и подключён сервис для веб-мастеров. Подробнее — в <a href="/privacy-policy">политике обработки персональных данных</a>.</p>
+    <p>На сайте используются файлы cookie и сервис аналитики поисковых показателей. Подробнее — в <a href="/privacy-policy">политике обработки персональных данных</a>.</p>
     <button type="button" onClick={dismiss}>Понятно</button>
   </aside>;
 }
