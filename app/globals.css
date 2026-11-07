@@ -1,2 +1,40 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
-:root{--blue:#293580;--ink:#1d2639;--muted:#515e72;--paper:#f4f5f7;--line:#cfd4df}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 'IBM Plex Sans',Arial,sans-serif}.shell{max-width:1120px;min-height:100vh;margin:auto;padding:40px 32px;display:flex;flex-direction:column}.brand{display:flex;align-items:center;gap:14px;color:var(--blue);font:700 18px 'Manrope',sans-serif}.brand img{width:54px;height:54px;object-fit:cover}section{margin:auto 0;max-width:760px;padding:72px 0}.eyebrow{color:var(--blue);font-size:12px;font-weight:700;letter-spacing:.08em}h1{font:800 clamp(40px,7vw,72px)/1.04 'Manrope',sans-serif;letter-spacing:-.045em;margin:20px 0}.lead{font-size:19px;color:var(--muted);max-width:560px}.status{display:inline-flex;align-items:center;gap:10px;margin-top:28px;padding:10px 14px;background:white;border:1px solid var(--line);border-radius:6px}.dot{width:9px;height:9px;background:#36835a;border-radius:50%}.admin-entry{color:var(--blue);font-weight:600}footer{border-top:1px solid var(--line);padding-top:20px;color:var(--muted);font-size:14px}@media(max-width:600px){.shell{padding:24px 20px}section{padding:48px 0}.lead{font-size:17px}}
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&family=Oswald:wght@500;600;700&display=swap');
+
+:root {
+  --blue: #293580;
+  --ink: #1d2639;
+  --muted: #515e72;
+  --paper: #f4f5f7;
+  --line: #cfd4df;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+}
+
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.5 'IBM Plex Sans', Arial, sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+:focus-visible {
+  outline: 3px solid #315fd0;
+  outline-offset: 4px;
+}
+
+/* Compact index layout for /services. Detail pages keep their existing layout. */

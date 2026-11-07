@@ -1,59 +1,908 @@
 'use client';
-import {useEffect,useState} from 'react';
 
-const modules=[['products','Каталог'],['categories','Категории'],['tags','Теги'],['specifications','Характеристики'],['services','Услуги'],['reviews','Отзывы'],['works','Работы'],['contacts','Контакты'],['requests','Заявки'],['media','Медиатека']];
-const api='http://localhost:4000/api/admin';
-const editable=['products','categories','tags','specifications','services','reviews','works','contacts'];
-const emptyPayload=(section)=>section==='products'?{description:'',media:[],characteristics:{},variants:[],categoryIds:[],tagIds:[]}:section==='categories'?{parentId:null,filterSpecificationIds:[]}:section==='specifications'?{valueType:'text',unit:'',filterMode:'values'}:section==='reviews'?{authorName:'',text:''}:section==='services'||section==='works'?{description:'',content:'',media:[]}:section==='contacts'?{phone:'',email:'',address:'',workHours:''}:{};
-function slugify(s){const map={а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'kh',ц:'ts',ч:'ch',ш:'sh',щ:'shch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya'};return s.toLowerCase().replace(/[а-яё]/g,c=>map[c]).trim().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}
-const jsonField=(value)=>JSON.stringify(value??{},null,2);
-function MediaSelector({mediaFiles,value=[],onChange}){
- const selected=Array.isArray(value)?value:[];
- return <fieldset className="editor-fieldset media-picker"><legend>Медиафайлы</legend>{mediaFiles.length?mediaFiles.map(file=><label className="check-label" key={file.id}><input type="checkbox" checked={selected.includes(file.url)} onChange={e=>onChange(e.target.checked?[...selected,file.url]:selected.filter(url=>url!==file.url))}/><span>{file.name} · {file.type.startsWith('video/')?'видео':'изображение'}</span><code>{file.url}</code></label>):<small>Медиатека пока пуста. Сначала загрузите фото или видео в разделе «Медиатека».</small>}</fieldset>;
+import { useEffect, useState } from 'react';
+import { adminApi, apiOrigin, authApi } from '../lib/api';
+
+const modules = [
+  ['products', 'Каталог'],
+  ['categories', 'Категории'],
+  ['tags', 'Теги'],
+  ['services', 'Направления'],
+  ['reviews', 'Отзывы'],
+  ['works', 'Проекты'],
+  ['contacts', 'Контакты'],
+  ['privacy-policy', 'Политика персональных данных'],
+  ['requests', 'Заявки'],
+];
+
+const api = adminApi;
+const editable = ['products', 'categories', 'tags', 'specifications', 'services', 'reviews', 'works', 'contacts'];
+const mediaTypes = 'image/jpeg,image/png,image/webp,video/mp4,video/webm';
+const imageTypes = 'image/jpeg,image/png,image/webp';
+
+function parseWorkStages(content = '') {
+  return content
+    .split(/\r?\n/)
+    .map((description) => description.replace(/^\s*(?:\d+[.)]|[-*•–—])\s*/, '').trim())
+    .filter(Boolean)
+    .map((description) => ({ description, image: '' }));
 }
-function StructuredFields({section,edit,setEdit,rows,categories,tags,specifications,mediaFiles}){
- const payload=edit.payload;const set=(key,value)=>setEdit({...edit,payload:{...payload,[key]:value}});
- const text=(key,label,opts={})=><label key={key}>{label}{opts.multiline?<textarea rows="5" value={payload[key]||''} onChange={e=>set(key,e.target.value)}/>:<input value={payload[key]||''} onChange={e=>set(key,e.target.value)}/>}</label>;
- const json=(key,label)=><details className="advanced-json" key={key}><summary>{label} — расширенные данные</summary><textarea rows="7" value={edit.invalidJson===key?edit.invalidJsonText:jsonField(key.startsWith('variant-')?payload.variants?.[Number(key.split('-').at(-1))]?.[key.split('-')[1]]:payload[key])} onChange={e=>{try{const value=JSON.parse(e.target.value);if(key.startsWith('variant-')){const [,field,index]=key.split('-');const variants=[...(payload.variants||[])];variants[Number(index)]={...variants[Number(index)],[field]:value};set('variants',variants);}else set(key,value);setEdit(current=>({...current,invalidJson:null,invalidJsonText:''}));}catch{setEdit({...edit,invalidJson:key,invalidJsonText:e.target.value})}}}/><small>Введите корректный JSON-объект или массив. Ошибка разбора будет показана при сохранении.</small></details>;
- if(section==='products'){
-  const variants=payload.variants||[];const updateVariant=(index,field,value)=>set('variants',variants.map((v,i)=>i===index?{...v,[field]:value}:v));
-  return <>
-   {text('description','Описание товара',{multiline:true})}
-   <label className="check-label featured-check"><input type="checkbox" checked={payload.featuredOnHome===true} onChange={e=>set('featuredOnHome',e.target.checked)}/> Показывать на главной (в подборку до 6 товаров)</label>
-   <fieldset className="editor-fieldset"><legend>Категории</legend>{categories.length?categories.map(c=><label className="check-label" key={c.id}><input type="checkbox" checked={(payload.categoryIds||[]).includes(c.id)} onChange={e=>set('categoryIds',e.target.checked?[...(payload.categoryIds||[]),c.id]:(payload.categoryIds||[]).filter(id=>id!==c.id))}/>{c.title}</label>):<small>Сначала добавьте категории.</small>}</fieldset>
-   <fieldset className="editor-fieldset"><legend>Теги</legend>{tags.length?tags.map(t=><label className="check-label" key={t.id}><input type="checkbox" checked={(payload.tagIds||[]).includes(t.id)} onChange={e=>set('tagIds',e.target.checked?[...(payload.tagIds||[]),t.id]:(payload.tagIds||[]).filter(id=>id!==t.id))}/>{t.title}</label>):<small>Сначала добавьте теги.</small>}</fieldset>
-   <MediaSelector mediaFiles={mediaFiles} value={payload.media} onChange={value=>set('media',value)}/>{json('characteristics','Общие характеристики')}
-   <div className="variant-head"><h3>Варианты товара</h3><button type="button" onClick={()=>set('variants',[...variants,{name:'',slug:'',priceRub:'',article:'',characteristics:{},media:[]}])}>Добавить вариант</button></div>
-   {!variants.length&&<p className="empty-state">Добавьте хотя бы один вариант: у каждого варианта своя цена и адрес страницы.</p>}
-   {variants.map((v,i)=><fieldset className="editor-fieldset variant-editor" key={i}><legend>Вариант {i+1}</legend><button type="button" className="remove-variant" onClick={()=>set('variants',variants.filter((_,n)=>n!==i))}>Удалить вариант</button><label>Название варианта<input value={v.name||''} onChange={e=>updateVariant(i,'name',e.target.value)}/></label><label>Адрес варианта<input pattern="[a-z0-9]+(-[a-z0-9]+)*" value={v.slug||''} onChange={e=>updateVariant(i,'slug',e.target.value.toLowerCase())}/></label><label>Цена, ₽<input type="number" min="0" step="1" value={v.priceRub??''} onChange={e=>updateVariant(i,'priceRub',e.target.value===''?'':Number(e.target.value))}/></label><label>Артикул<input value={v.article||''} onChange={e=>updateVariant(i,'article',e.target.value)}/></label>{json(`variant-characteristics-${i}`,'Характеристики варианта')}<MediaSelector mediaFiles={mediaFiles} value={v.media} onChange={value=>updateVariant(i,'media',value)}/><small>Если фото или характеристики не заданы, сайт использует общие данные товара.</small></fieldset>)}
-  </>;
- }
- if(section==='categories')return <><label>Родительская категория<select value={payload.parentId??''} onChange={e=>set('parentId',e.target.value?Number(e.target.value):null)}><option value="">Без родительской категории</option>{categories.filter(c=>c.id!==edit.id).map(c=><option key={c.id} value={c.id}>{c.title}</option>)}</select></label><fieldset className="editor-fieldset"><legend>Характеристики для фильтров</legend>{specifications.map(s=><label className="check-label" key={s.id}><input type="checkbox" checked={(payload.filterSpecificationIds||[]).includes(s.id)} onChange={e=>set('filterSpecificationIds',e.target.checked?[...(payload.filterSpecificationIds||[]),s.id]:(payload.filterSpecificationIds||[]).filter(id=>id!==s.id))}/>{s.title}</label>)}{!specifications.length&&<small>Сначала добавьте характеристики.</small>}</fieldset></>;
- if(section==='specifications')return <><label>Тип значения<select value={payload.valueType||'text'} onChange={e=>set('valueType',e.target.value)}><option value="text">Текст</option><option value="number">Число</option></select></label>{text('unit','Единица измерения')}<label>Способ фильтрации<select value={payload.filterMode||'values'} onChange={e=>set('filterMode',e.target.value)}><option value="values">Готовые значения</option><option value="range">Диапазон «от — до»</option></select></label></>;
- if(section==='reviews')return <>{text('authorName','Имя автора')}{text('text','Текст отзыва',{multiline:true})}</>;
- if(section==='services'||section==='works')return <>{text('description','Краткое описание',{multiline:true})}{text('content',section==='works'?'Описание работы':'Подробное описание',{multiline:true})}{json('media','Фото и видео')}</>;
- if(section==='contacts')return <>{text('phone','Телефон')}{text('email','Электронная почта')}{text('address','Адрес')}{text('workHours','Часы работы')}</>;
- if(section==='tags')return <p className="editor-help">Укажите название и адрес тега. Теги связываются с товарами в редакторе товара.</p>;
- return null;
+
+function emptyPayload(section) {
+  if (section === 'products') return { description: '', media: [], characteristics: {}, variants: [], categoryIds: [], tagIds: [] };
+  if (section === 'categories') return { parentId: null, filterSpecificationIds: [] };
+  if (section === 'specifications') return { valueType: 'text', unit: '', filterMode: 'values' };
+  if (section === 'reviews') return { authorName: '', text: '' };
+  if (section === 'services') return { description: '', content: '', media: [] };
+  if (section === 'works') return { description: '', content: '', media: [], stages: [] };
+  if (section === 'contacts') return { phone: '', email: '', address: '', workHours: '', max: '', vk: '', telegram: '', legalName: '', inn: '', ogrn: '', legalAddress: '' };
+  return {};
 }
-export default function AdminDashboard({username}){
- const [section,setSection]=useState('products'),[rows,setRows]=useState([]),[edit,setEdit]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[reqs,setReqs]=useState([]),[files,setFiles]=useState([]),[file,setFile]=useState(null),[notice,setNotice]=useState(''),[categories,setCategories]=useState([]),[tags,setTags]=useState([]),[specifications,setSpecifications]=useState([]),[mediaFiles,setMediaFiles]=useState([]);
- async function load(){setError('');try{const r=await fetch(`${api}/${section}`,{credentials:'include'});if(!r.ok)throw Error('Не удалось загрузить раздел.');const d=await r.json();section==='requests'?setReqs(d):section==='media'?setFiles(d):setRows(d);}catch(e){setError(e.message)}}
- async function loadLookups(){const types=['categories','tags','specifications'];const responses=await Promise.all([...types.map(t=>fetch(`${api}/content/${t}`,{credentials:'include'})),fetch(`${api}/media`,{credentials:'include'})]);const data=await Promise.all(responses.map(async r=>r.ok?r.json():[]));setCategories(data[0]);setTags(data[1]);setSpecifications(data[2]);setMediaFiles(data[3]);}
- useEffect(()=>{if(section!=='overview')load();else{setRows([]);setError('')}setEdit(null);},[section]);
- useEffect(()=>{if(edit)loadLookups();},[Boolean(edit)]);
- async function logout(){await fetch('http://localhost:4000/api/auth/logout',{method:'POST',credentials:'include'});location.assign('/admin/login')}
- function open(row){setEdit(row?{id:row.id,title:row.title,slug:row.slug,payload:row.payload||{},published:row.published,sortOrder:row.sort_order}: {title:'',slug:'',payload:emptyPayload(section),published:false,sortOrder:0})}
- async function save(e){e.preventDefault();setBusy(true);setError('');try{if(edit.invalidJson)throw Error('Исправьте JSON в поле расширенных данных.');const payload={...edit.payload};if(section==='products')payload.variants=(payload.variants||[]).map(v=>({...v,priceRub:Number(v.priceRub)}));const body={slug:edit.slug,title:edit.title,payload,published:edit.published,sortOrder:edit.sortOrder};const r=await fetch(`${api}/content/${section}${edit.id?`/${edit.id}`:''}`,{method:edit.id?'PUT':'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'Ошибка сохранения.');setNotice('Изменения сохранены');setEdit(null);load()}catch(e){setError(e.message)}finally{setBusy(false)}}
- async function remove(row){if(!confirm(`Удалить «${row.title}»?`))return;const r=await fetch(`${api}/content/${section}/${row.id}`,{method:'DELETE',credentials:'include'});if(!r.ok){const d=await r.json().catch(()=>({}));setError(d.error||'Не удалось удалить запись.');return}load()}
- async function updateStatus(id,status){const r=await fetch(`${api}/requests/${id}`,{method:'PUT',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});if(!r.ok)setError('Не удалось изменить статус.');else load()}
- async function upload(e){e.preventDefault();if(!file)return;const r=await fetch(`${api}/media`,{method:'POST',credentials:'include',headers:{'Content-Type':file.type,'X-File-Name':encodeURIComponent(file.name)},body:file});const d=await r.json().catch(()=>({}));if(!r.ok)setError(d.error||'Ошибка загрузки файла.');else{setNotice('Файл загружен');setFile(null);load()}}
- const current=modules.find(m=>m[0]===section)?.[1]||'Обзор';
- return <div className="admin-frame"><aside className="admin-sidebar"><a href="/" className="admin-brand sidebar-brand"><img src="/logo-reference.png" alt=""/><span>Уралмаш ГОО<small>Админ-панель</small></span></a><p className="nav-caption">УПРАВЛЕНИЕ САЙТОМ</p><button className={`nav-item ${section==='overview'?'active':''}`} onClick={()=>setSection('overview')}>▦　Обзор</button>{modules.map(([id,label])=><button key={id} className={`nav-item ${section===id?'active':''}`} onClick={()=>setSection(id)}>{label}</button>)}<div className="sidebar-bottom"><span className="status-light"/>Доступ: {username}</div></aside><main className="admin-main"><header className="admin-topbar"><div className="crumb">Админ-панель <span>/</span> {current}</div><div className="account"><span>{username}</span><button onClick={logout}>Выйти</button></div></header><div className="admin-content"><div className="page-heading"><div><p className="admin-eyebrow">УПРАВЛЕНИЕ САЙТОМ</p><h1>{current}</h1><p>{section==='overview'?'Рабочее пространство сайта.':`Записи раздела «${current}».`}</p></div>{editable.includes(section)&&<button className="admin-primary add-button" onClick={()=>open(null)}>Добавить запись</button>}</div>{error&&<div className="form-error" role="alert">{error}</div>}{notice&&<div className="admin-notice">{notice}<button onClick={()=>setNotice('')}>×</button></div>}
- {section==='overview'&&<><section className="setup-banner"><div className="banner-symbol">У</div><div><span>ПАНЕЛЬ УПРАВЛЕНИЯ</span><h2>Контент сайта в одном месте</h2><p>Выберите раздел для управления товарами, материалами и обращениями.</p></div><div className="banner-line"/></section><div className="module-grid">{modules.map(([id,label])=><button className="module-card module-button" key={id} onClick={()=>setSection(id)}><h3>{label}</h3><p>Открыть управление разделом</p></button>)}</div></>}
- {edit&&<form className="editor-card" onSubmit={save}><div className="editor-head"><h2>{edit.id?'Редактирование':'Новая запись'}</h2><button type="button" onClick={()=>setEdit(null)}>Закрыть</button></div><label>Название<input required value={edit.title} onChange={e=>setEdit({...edit,title:e.target.value,slug:edit.id?edit.slug:slugify(e.target.value)})}/></label><label>Адрес страницы (латиницей)<input required pattern="[a-z0-9]+(-[a-z0-9]+)*" value={edit.slug} onChange={e=>setEdit({...edit,slug:e.target.value})}/></label><StructuredFields section={section} edit={edit} setEdit={setEdit} rows={rows} categories={categories} tags={tags} specifications={specifications} mediaFiles={mediaFiles}/><label className="check-label"><input type="checkbox" checked={edit.published} onChange={e=>setEdit({...edit,published:e.target.checked})}/> Опубликовано</label><label>Порядок отображения<input type="number" value={edit.sortOrder} onChange={e=>setEdit({...edit,sortOrder:e.target.value})}/></label><div className="editor-actions"><button className="admin-primary" disabled={busy}>{busy?'Сохраняем…':'Сохранить'}</button><button type="button" onClick={()=>setEdit(null)}>Отмена</button></div></form>}
- {section==='requests'&&<div className="table-wrap"><table><thead><tr><th>Имя</th><th>Телефон</th><th>Создана</th><th>Статус</th></tr></thead><tbody>{reqs.map(r=><tr key={r.id}><td>{r.name}</td><td>{r.phone}</td><td>{new Date(r.created_at).toLocaleString('ru-RU')}</td><td><select value={r.status} onChange={e=>updateStatus(r.id,e.target.value)}><option>Новая</option><option>В работе</option><option>Обработана</option></select></td></tr>)}</tbody></table>{!reqs.length&&<p className="empty-state">Заявок пока нет.</p>}</div>}
- {section==='media'&&<><form className="editor-card upload-form" onSubmit={upload}><h2>Загрузить изображение или видео</h2><p>JPEG, PNG, WebP, MP4 или WebM; размер до 100 МБ.</p><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onChange={e=>setFile(e.target.files?.[0]||null)}/><button className="admin-primary" disabled={!file}>Загрузить</button></form><div className="module-grid">{files.map(f=><article className="module-card" key={f.id}><strong>{f.name}</strong><p>{f.type} · {(f.size/1024/1024).toFixed(1)} МБ</p><code>{f.url}</code></article>)}</div></>}
- {editable.includes(section)&&<div className="table-wrap"><table><thead><tr><th>Название</th><th>Адрес</th><th>Статус</th><th>Действия</th></tr></thead><tbody>{rows.map(r=><tr key={r.id}><td>{r.title}</td><td><code>{r.slug}</code></td><td>{r.published?'Опубликовано':'Черновик'}</td><td><button onClick={()=>open(r)}>Изменить</button><button onClick={()=>remove(r)}>Удалить</button></td></tr>)}</tbody></table>{!rows.length&&<p className="empty-state">Записей пока нет. Добавьте первую запись.</p>}</div>}
- </div></main></div>
+
+function slugify(value) {
+  const map = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'kh', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'shch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya' };
+  return value.toLowerCase().replace(/[а-яё]/g, (letter) => map[letter]).trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+function mediaSource(url) {
+  return url && url.startsWith('/') ? apiOrigin + url : url;
+}
+
+function formatSize(bytes) {
+  return bytes < 1024 * 1024 ? Math.max(1, Math.round(bytes / 1024)) + ' КБ' : (bytes / 1024 / 1024).toFixed(1) + ' МБ';
+}
+
+function requestIntentLabel(intent) {
+  if (intent === 'repair') return 'Ремонт';
+  if (intent === 'project') return 'Проект';
+  if (intent === 'purchase') return 'Покупка';
+  return 'Общий вопрос';
+}
+
+function FormField({ label, help, children, className = '' }) {
+  return (
+    <label className={'field-control ' + className}>
+      <span>{label}</span>
+      {children}
+      {help && <small>{help}</small>}
+    </label>
+  );
+}
+
+function MediaSelector({ label, help, mediaFiles, value, onChange, onUpload, onDeleteMedia, singleImage = false }) {
+  const [uploading, setUploading] = useState(false);
+  const selected = Array.isArray(value) ? value.map((item) => typeof item === 'string' ? item : item?.url).filter(Boolean) : [];
+  const unlisted = selected.filter((url) => !mediaFiles.some((file) => file.url === url));
+  const availableFiles = singleImage ? mediaFiles.filter((file) => file.type.startsWith('image/')) : mediaFiles;
+
+  async function addFile(event) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const uploaded = await onUpload(file);
+      if (uploaded?.url && (singleImage || !selected.includes(uploaded.url))) {
+        onChange(singleImage ? [uploaded.url] : [...selected, uploaded.url]);
+      }
+    } finally {
+      setUploading(false);
+      input.value = '';
+    }
+  }
+
+  return (
+    <fieldset className="editor-fieldset media-picker">
+      <legend>{label}</legend>
+      <p className="field-help">{help}</p>
+      <div className="media-picker__toolbar">
+        <label className="media-upload-button">
+          <span>{uploading ? 'Загружаем…' : 'Загрузить фото или видео'}</span>
+          <input type="file" accept={singleImage ? imageTypes : mediaTypes} disabled={uploading} onChange={addFile} />
+        </label>
+        <small>{singleImage ? 'JPG, PNG или WebP · до 25 МБ; фото автоматически приводится к WebP' : 'JPG, PNG, WebP до 25 МБ; MP4 и WebM до 100 МБ'}</small>
+      </div>
+      {availableFiles.length || unlisted.length ? (
+        <div className="media-grid">
+          {availableFiles.map((file) => {
+            const isVideo = file.type.startsWith('video/');
+            const checked = selected.includes(file.url);
+            return (
+              <div className={'media-option' + (checked ? ' is-selected' : '')} key={file.id}>
+                <input
+                  id={`media-option-${file.id}`}
+                  className="media-option__check"
+                  type="checkbox"
+                  checked={checked}
+                  onChange={(event) => onChange(singleImage
+                    ? (event.target.checked ? [file.url] : [])
+                    : (event.target.checked ? [...selected, file.url] : selected.filter((url) => url !== file.url)))}
+                />
+                <label className="media-option__label" htmlFor={`media-option-${file.id}`}>
+                  <span className="media-option__preview">
+                    {isVideo ? <span className="media-option__video">▶ Видео</span> : <img src={mediaSource(file.url)} alt="" loading="lazy" />}
+                  </span>
+                  <span className="media-option__name">{file.name}</span>
+                  <small>{formatSize(file.size)}</small>
+                </label>
+                {!checked && <button className="media-option__delete" type="button" onClick={() => onDeleteMedia(file)}>Удалить файл</button>}
+              </div>
+            );
+          })}
+          {unlisted.map((url) => (
+            <label className="media-option media-option--unlisted is-selected" key={url}>
+              <input
+                className="media-option__check"
+                type="checkbox"
+                checked
+                onChange={() => onChange(singleImage ? [] : selected.filter((item) => item !== url))}
+              />
+              <span className="media-option__preview"><span className="media-option__video">Добавлено ранее</span></span>
+              <span className="media-option__name">{url}</span>
+              <small>Ссылка вне медиатеки</small>
+            </label>
+          ))}
+        </div>
+      ) : (
+        <p className="media-empty">Файлов пока нет. Загрузите нужное фото или видео здесь.</p>
+      )}
+    </fieldset>
+  );
+}
+
+function StructuredFields({ section, edit, setEdit, categories, tags, specifications, mediaFiles, onUpload, onDeleteMedia, onOpenCategory, onAddFilter }) {
+  const payload = edit.payload;
+  const [filterTitle, setFilterTitle] = useState('');
+  const [filterType, setFilterType] = useState('text');
+  const [filterUnit, setFilterUnit] = useState('');
+  const [filterMode, setFilterMode] = useState('values');
+  const set = (key, value) => setEdit({ ...edit, payload: { ...payload, [key]: value } });
+  const text = (key, label, options = {}) => (
+    <FormField key={key} label={label} help={options.help}>
+      {options.multiline
+        ? <textarea rows={options.rows || 4} placeholder={options.placeholder} value={payload[key] || ''} onChange={(event) => set(key, event.target.value)} />
+        : <input type={options.type || 'text'} placeholder={options.placeholder} value={payload[key] ?? ''} onChange={(event) => set(key, event.target.value)} />}
+    </FormField>
+  );
+  const json = (key, label, help) => {
+    const variantParts = key.startsWith('variant-') ? key.split('-') : null;
+    const value = variantParts
+      ? payload.variants?.[Number(variantParts.at(-1))]?.[variantParts[1]]
+      : payload[key];
+
+    return (
+      <details className="advanced-json" key={key}>
+        <summary>{label}</summary>
+        <small>{help}</small>
+        <textarea
+          rows="7"
+          value={edit.invalidJson === key ? edit.invalidJsonText : JSON.stringify(value ?? {}, null, 2)}
+          onChange={(event) => {
+            try {
+              const nextValue = JSON.parse(event.target.value);
+              if (variantParts) {
+                const variants = [...(payload.variants || [])];
+                const index = Number(variantParts.at(-1));
+                variants[index] = { ...variants[index], [variantParts[1]]: nextValue };
+                set('variants', variants);
+              } else {
+                set(key, nextValue);
+              }
+              setEdit((current) => ({ ...current, invalidJson: null, invalidJsonText: '' }));
+            } catch {
+              setEdit({ ...edit, invalidJson: key, invalidJsonText: event.target.value });
+            }
+          }}
+        />
+      </details>
+    );
+  };
+
+  const characteristicFields = (value, onChange) => {
+    const categoryIds = payload.categoryIds || [];
+    const ids = new Set(categories.filter((category) => categoryIds.includes(category.id)).flatMap((category) => category.payload?.filterSpecificationIds || []));
+    const filters = specifications.filter((specification) => ids.has(specification.id));
+    return <fieldset className="editor-fieldset"><legend>Значения для фильтров</legend>
+      {filters.length ? filters.map((filter) => <FormField key={filter.id} label={filter.title + (filter.payload?.unit ? ', ' + filter.payload.unit : '')}>
+        <input type={filter.payload?.valueType === 'number' ? 'number' : 'text'} step={filter.payload?.valueType === 'number' ? 'any' : undefined} value={value?.[filter.title] ?? ''} onChange={(event) => {
+          const next = { ...value };
+          if (event.target.value === '') delete next[filter.title];
+          else next[filter.title] = filter.payload?.valueType === 'number' ? Number(event.target.value) : event.target.value;
+          onChange(next);
+        }} />
+      </FormField>) : <small>Выберите категорию и настройте в ней фильтры.</small>}
+    </fieldset>;
+  };
+
+  if (section === 'products') {
+    const variants = payload.variants || [];
+    const updateVariant = (index, field, value) => set('variants', variants.map((variant, itemIndex) => itemIndex === index ? { ...variant, [field]: value } : variant));
+
+    return (
+      <>
+        {text('description', 'Описание товара', { multiline: true, help: 'Коротко опишите назначение и основные особенности оборудования.' })}
+        <label className="check-line">
+          <input type="checkbox" checked={payload.featuredOnHome === true} onChange={(event) => set('featuredOnHome', event.target.checked)} />
+          <span><strong>Показывать на главной</strong><small>В блок попадут до шести опубликованных товаров с фото.</small></span>
+        </label>
+        <fieldset className="editor-fieldset">
+          <legend>Категории</legend>
+          <p className="field-help">Выберите все разделы, в которых должен появиться товар.</p>
+          {categories.length ? categories.map((category) => (
+            <label className="check-line check-line--compact" key={category.id}>
+              <input type="checkbox" checked={(payload.categoryIds || []).includes(category.id)} onChange={(event) => set('categoryIds', event.target.checked ? [...(payload.categoryIds || []), category.id] : (payload.categoryIds || []).filter((id) => id !== category.id))} />
+              <span>{category.title}</span>
+            </label>
+          )) : <small>Сначала добавьте категории.</small>}
+        </fieldset>
+        <fieldset className="editor-fieldset">
+          <legend>Теги</legend>
+          <p className="field-help">Теги помогают объединять товары по общим признакам.</p>
+          {tags.length ? tags.map((tag) => (
+            <label className="check-line check-line--compact" key={tag.id}>
+              <input type="checkbox" checked={(payload.tagIds || []).includes(tag.id)} onChange={(event) => set('tagIds', event.target.checked ? [...(payload.tagIds || []), tag.id] : (payload.tagIds || []).filter((id) => id !== tag.id))} />
+              <span>{tag.title}</span>
+            </label>
+          )) : <small>Сначала добавьте теги.</small>}
+        </fieldset>
+        <MediaSelector
+          label="Фото и видео товара"
+          help="Общая галерея товара. Для отдельного варианта можно назначить свои файлы ниже."
+          mediaFiles={mediaFiles}
+          value={payload.media}
+          onChange={(value) => set('media', value)}
+          onUpload={onUpload}
+          onDeleteMedia={onDeleteMedia}
+        />
+        {characteristicFields(payload.characteristics || {}, (value) => set('characteristics', value))}
+        <section className="variant-section">
+          <div className="variant-head">
+            <div><h3>Варианты товара</h3><p>У каждого варианта свой адрес страницы, цена и артикул.</p></div>
+            <button type="button" onClick={() => set('variants', [...variants, { name: '', slug: '', priceRub: '', article: '', characteristics: {}, media: [] }])}>Добавить вариант</button>
+          </div>
+          {!variants.length && <p className="empty-state">Добавьте вариант: по нему будут показываться цена и страница товара.</p>}
+          {variants.map((variant, index) => (
+            <fieldset className="editor-fieldset variant-editor" key={index}>
+              <legend>Вариант {index + 1}</legend>
+              <button type="button" className="remove-variant" onClick={() => set('variants', variants.filter((_, itemIndex) => itemIndex !== index))}>Удалить</button>
+              <div className="editor-grid">
+                <FormField label="Название варианта" help="Например, производительность или комплектация.">
+                  <input value={variant.name || ''} onChange={(event) => updateVariant(index, 'name', event.target.value)} />
+                </FormField>
+                <FormField label="Адрес страницы" help="Латиницей, без пробелов.">
+                  <input pattern="[a-z0-9]+(-[a-z0-9]+)*" value={variant.slug || ''} onChange={(event) => updateVariant(index, 'slug', event.target.value.toLowerCase())} />
+                </FormField>
+                <FormField label="Цена, ₽" help="Целое число. В каталоге будет показана минимальная цена вариантов.">
+                  <input type="number" min="0" step="1" value={variant.priceRub ?? ''} onChange={(event) => updateVariant(index, 'priceRub', event.target.value === '' ? '' : Number(event.target.value))} />
+                </FormField>
+                <FormField label="Артикул">
+                  <input value={variant.article || ''} onChange={(event) => updateVariant(index, 'article', event.target.value)} />
+                </FormField>
+              </div>
+              {characteristicFields(variant.characteristics || {}, (value) => updateVariant(index, 'characteristics', value))}
+              <MediaSelector
+                label="Фото и видео варианта"
+                help="Если ничего не выбрать, вариант будет использовать общую галерею товара."
+                mediaFiles={mediaFiles}
+                value={variant.media}
+                onChange={(value) => updateVariant(index, 'media', value)}
+                onUpload={onUpload}
+                onDeleteMedia={onDeleteMedia}
+              />
+            </fieldset>
+          ))}
+        </section>
+      </>
+    );
+  }
+
+  if (section === 'categories') {
+    return (
+      <>
+        {edit.id && <details className="advanced-json"><summary>Расположение категории</summary>
+          <FormField label="Родительская категория"><select value={payload.parentId ?? ''} onChange={(event) => set('parentId', event.target.value ? Number(event.target.value) : null)}><option value="">Верхний уровень</option>{categories.filter((category) => category.id !== edit.id).map((category) => <option key={category.id} value={category.id}>{category.title}</option>)}</select></FormField>
+        </details>}
+        <fieldset className="editor-fieldset">
+          <legend>Подкатегории</legend>
+          {!edit.id ? <small>Сначала сохраните категорию, затем добавьте подкатегории.</small> : <>
+            {categories.filter((category) => category.payload?.parentId === edit.id).map((category) => <div className="inline-row" key={category.id}><span>{category.title}</span><button type="button" onClick={() => onOpenCategory(category)}>Открыть</button></div>)}
+            <button type="button" onClick={() => onOpenCategory(null, edit.id)}>Добавить подкатегорию</button>
+          </>}
+        </fieldset>
+        <fieldset className="editor-fieldset">
+          <legend>Фильтры каталога</legend>
+          <small>Выберите фильтры для этой категории или добавьте новый.</small>
+          {specifications.map((specification) => (
+            <label className="check-line check-line--compact" key={specification.id}>
+              <input type="checkbox" checked={(payload.filterSpecificationIds || []).includes(specification.id)} onChange={(event) => set('filterSpecificationIds', event.target.checked ? [...(payload.filterSpecificationIds || []), specification.id] : (payload.filterSpecificationIds || []).filter((id) => id !== specification.id))} />
+              <span>{specification.title}{specification.payload?.unit ? ', ' + specification.payload.unit : ''}</span>
+            </label>
+          ))}
+          <div className="inline-filter">
+            <input aria-label="Название фильтра" placeholder="Название фильтра" value={filterTitle} onChange={(event) => setFilterTitle(event.target.value)} />
+            <select aria-label="Тип фильтра" value={filterType} onChange={(event) => { setFilterType(event.target.value); setFilterMode('values'); }}><option value="text">Текст</option><option value="number">Число</option></select>
+            <input aria-label="Единица измерения" placeholder="Ед. измерения" value={filterUnit} onChange={(event) => setFilterUnit(event.target.value)} />
+            {filterType === 'number' && <select aria-label="Способ фильтрации" value={filterMode} onChange={(event) => setFilterMode(event.target.value)}><option value="values">Выбор значений</option><option value="range">Диапазон</option></select>}
+            <button type="button" onClick={async () => { if (await onAddFilter(filterTitle, filterType, filterUnit, filterMode)) { setFilterTitle(''); setFilterUnit(''); } }}>Добавить фильтр</button>
+          </div>
+        </fieldset>
+      </>
+    );
+  }
+
+  if (section === 'specifications') {
+    return (
+      <>
+        <FormField label="Тип значения" help="Выберите число для характеристик с единицей измерения, например мощности.">
+          <select value={payload.valueType || 'text'} onChange={(event) => set('valueType', event.target.value)}>
+            <option value="text">Текст</option>
+            <option value="number">Число</option>
+          </select>
+        </FormField>
+        {text('unit', 'Единица измерения', { placeholder: 'Например, кВт', help: 'Оставьте пустым для текстовых характеристик.' })}
+        <FormField label="Способ фильтрации" help="Задайте диапазон для чисел или выбор готовых значений.">
+          <select value={payload.filterMode || 'values'} onChange={(event) => set('filterMode', event.target.value)}>
+            <option value="values">Готовые значения</option>
+            <option value="range">Диапазон «от — до»</option>
+          </select>
+        </FormField>
+      </>
+    );
+  }
+
+  if (section === 'reviews') {
+    return (
+      <>
+        {text('authorName', 'Имя автора', { placeholder: 'Как подписать отзыв?' })}
+        {text('text', 'Текст отзыва', { multiline: true, help: 'Публикуйте текст с согласия автора.' })}
+      </>
+    );
+  }
+
+  if (section === 'services' || section === 'works') {
+    const isWork = section === 'works';
+    const stages = isWork ? (Array.isArray(payload.stages) ? payload.stages : parseWorkStages(payload.content)) : [];
+    const updateStage = (index, key, value) => set('stages', stages.map((stage, stageIndex) => stageIndex === index ? { ...stage, [key]: value } : stage));
+    const moveStage = (index, direction) => {
+      const nextStages = [...stages];
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= nextStages.length) return;
+      [nextStages[index], nextStages[targetIndex]] = [nextStages[targetIndex], nextStages[index]];
+      set('stages', nextStages);
+    };
+
+    return (
+      <>
+        {text('description', 'Краткое описание', { multiline: true, rows: 3, help: 'Этот текст используется в списке раздела.' })}
+        {isWork ? (
+          <fieldset className="editor-fieldset work-stages-editor">
+            <legend>Этапы проекта</legend>
+            <p className="field-help">Укажите этапы проектирования или изготовления и добавьте относящиеся к ним фото. Порядок этапов можно менять.</p>
+            {stages.map((stage, index) => (
+              <fieldset className="editor-fieldset work-stage-editor" key={stage.id || index}>
+                <legend>Этап {index + 1}</legend>
+                <FormField label="Описание этапа" help="Опишите, что сделали на этом этапе.">
+                  <textarea
+                    rows={3}
+                    value={stage.description || ''}
+                    onChange={(event) => updateStage(index, 'description', event.target.value)}
+                  />
+                </FormField>
+                <MediaSelector
+                  label="Фото этапа"
+                  help="Выберите или загрузите фото, относящееся к этому этапу."
+                  mediaFiles={mediaFiles}
+                  value={stage.image ? [stage.image] : []}
+                  onChange={(value) => updateStage(index, 'image', value[0] || '')}
+                  onUpload={onUpload}
+                  onDeleteMedia={onDeleteMedia}
+                  singleImage
+                />
+                <div className="inline-row work-stage-editor__actions">
+                  <button type="button" disabled={index === 0} onClick={() => moveStage(index, -1)}>Выше</button>
+                  <button type="button" disabled={index === stages.length - 1} onClick={() => moveStage(index, 1)}>Ниже</button>
+                  <button type="button" onClick={() => set('stages', stages.filter((_, stageIndex) => stageIndex !== index))}>Удалить этап</button>
+                </div>
+              </fieldset>
+            ))}
+            <button type="button" onClick={() => set('stages', [...stages, { description: '', image: '' }])}>Добавить этап</button>
+          </fieldset>
+        ) : text('content', 'Описание направления', { multiline: true, help: 'Подробное описание проектирования, изготовления или поставки.' })}
+        <MediaSelector
+          label={isWork ? 'Фото и видео проекта' : 'Фото и видео направления'}
+          help={isWork ? 'Добавьте материалы проекта или изготовленного оборудования.' : 'Добавьте изображения, которые поясняют направление.'}
+          mediaFiles={mediaFiles}
+          value={payload.media}
+          onChange={(value) => set('media', value)}
+          onUpload={onUpload}
+          onDeleteMedia={onDeleteMedia}
+        />
+      </>
+    );
+  }
+
+  if (section === 'contacts') {
+    return (
+      <>
+        {text('phone', 'Телефон', { placeholder: '+7 (___) ___-__-__', help: 'Номер, по которому клиент сможет связаться с компанией.' })}
+        {text('email', 'Электронная почта', { type: 'email', placeholder: 'info@example.ru', help: 'Адрес для обращений с сайта.' })}
+        {text('address', 'Адрес', { placeholder: 'Город, улица, дом' })}
+        {text('workHours', 'Часы работы', { placeholder: 'Пн–Пт, 09:00–18:00' })}
+        {text('max', 'Ссылка на MAX', { type: 'url', placeholder: 'https://max.ru/...' })}
+        {text('vk', 'Ссылка на ВКонтакте', { type: 'url', placeholder: 'https://vk.com/...' })}
+        {text('telegram', 'Ссылка на Telegram', { type: 'url', placeholder: 'https://t.me/...' })}
+        <fieldset className="editor-fieldset">
+          <legend>Юридическая информация</legend>
+          <p className="field-help">Заполненные данные будут показаны в подвале сайта, если контакт опубликован.</p>
+          {text('legalName', 'Полное наименование организации', { placeholder: 'Общество с ограниченной ответственностью «Название»' })}
+          {text('inn', 'ИНН', { placeholder: '10 цифр', help: 'ИНН юридического лица — 10 цифр.' })}
+          {text('ogrn', 'ОГРН', { placeholder: '13 цифр', help: 'ОГРН юридического лица — 13 цифр.' })}
+          {text('legalAddress', 'Юридический адрес', { placeholder: 'Адрес из ЕГРЮЛ' })}
+        </fieldset>
+      </>
+    );
+  }
+
+  if (section === 'tags') {
+    return <p className="editor-help">Тег связывается с товарами в форме каталога и помогает посетителю сузить список.</p>;
+  }
+
+  return null;
+}
+
+function PasswordSettings() {
+  const [step, setStep] = useState('request');
+  const [code, setCode] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function submit(event) {
+    event.preventDefault();
+    setError('');
+    if (step === 'password' && newPassword !== confirmation) return setError('Новые пароли не совпадают.');
+    setBusy(true);
+    try {
+      const action = step === 'request' ? 'code' : step === 'code' ? 'verify' : 'change';
+      const body = step === 'code' ? { code } : step === 'password' ? { currentPassword, newPassword } : {};
+      const response = await fetch(`${authApi}/password/${action}`, {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Не удалось выполнить запрос.');
+      if (step === 'request') setStep('code');
+      else if (step === 'code') { setCode(''); setStep('password'); }
+      else { setCurrentPassword(''); setNewPassword(''); setConfirmation(''); setStep('done'); }
+    } catch (requestError) { setError(requestError.message || 'Не удалось связаться с сервером.'); }
+    finally { setBusy(false); }
+  }
+
+  if (step === 'done') return <div className="editor-card"><h2>Пароль изменён</h2><p>Для безопасности выполнен выход из всех сеансов.</p><a href="/admin/login">Войти с новым паролем</a></div>;
+  return <form className="editor-card" onSubmit={submit}>
+    <h2>Смена пароля</h2>
+    {step === 'request' && <p>Отправим код подтверждения на почту, настроенную для уведомлений сайта.</p>}
+    {step === 'code' && <><p>Введите шестизначный код из письма. Он действует 10 минут.</p><FormField label="Код из письма"><input required inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={code} onChange={(event) => setCode(event.target.value)} /></FormField></>}
+    {step === 'password' && <><FormField label="Текущий пароль"><input required type="password" autoComplete="current-password" maxLength={256} value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></FormField><FormField label="Новый пароль" help="От 12 до 256 символов."><input required type="password" autoComplete="new-password" minLength={12} maxLength={256} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></FormField><FormField label="Повторите новый пароль"><input required type="password" autoComplete="new-password" minLength={12} maxLength={256} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></FormField></>}
+    {error && <p className="form-error" role="alert">{error}</p>}
+    <div className="editor-actions"><button className="admin-primary" disabled={busy}>{busy ? 'Подождите…' : step === 'request' ? 'Отправить код' : step === 'code' ? 'Подтвердить код' : 'Изменить пароль'}</button>{step !== 'request' && <button type="button" disabled={busy} onClick={() => { setStep('request'); setCode(''); setCurrentPassword(''); setNewPassword(''); setConfirmation(''); setError(''); }}>Начать заново</button>}</div>
+  </form>;
+}
+
+function PrivacyPolicySettings() {
+  const [text, setText] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(api + '/privacy-policy', { credentials: 'include', signal: controller.signal })
+      .then((response) => { if (!response.ok) throw new Error(); return response.json(); })
+      .then((data) => { setText(data.text); setLoaded(true); })
+      .catch((error) => { if (error.name !== 'AbortError') setMessage('Не удалось загрузить политику.'); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, []);
+  async function savePolicy(event) {
+    event.preventDefault();
+    setBusy(true);
+    setMessage('');
+    try {
+      const response = await fetch(api + '/privacy-policy', { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+      if (!response.ok) { const data = await response.json().catch(() => ({})); throw new Error(data.error || 'Не удалось сохранить политику.'); }
+      setMessage('Политика сохранена и опубликована.');
+    } catch (error) { setMessage(error.message || 'Не удалось сохранить политику.'); }
+    finally { setBusy(false); }
+  }
+  return <form className="editor-card" onSubmit={savePolicy}>
+    <div className="editor-card__heading"><h2>Политика обработки персональных данных</h2></div>
+    <FormField label="Текст политики" help="Текст будет опубликован на странице политики. Переносы строк сохраняются.">
+      <textarea rows={20} required maxLength={12000} value={text} onChange={(event) => setText(event.target.value)} disabled={!loaded} />
+    </FormField>
+    {message && <p role="status">{message}</p>}
+    <div className="editor-actions"><button className="admin-primary" disabled={loading || !loaded || busy}>{busy ? 'Сохраняем…' : 'Сохранить'}</button></div>
+  </form>;
+}
+
+export default function AdminDashboard({ username }) {
+  const [section, setSection] = useState('products');
+  const [rows, setRows] = useState([]);
+  const [edit, setEdit] = useState(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [reqs, setReqs] = useState([]);
+  const [mailStatus, setMailStatus] = useState(null);
+  const [notice, setNotice] = useState('');
+  const [categories, setCategories] = useState([]);
+  const [tags, setTags] = useState([]);
+  const [specifications, setSpecifications] = useState([]);
+  const [mediaFiles, setMediaFiles] = useState([]);
+
+  async function load(contactId = null) {
+    setError('');
+    try {
+      const endpoint = section === 'requests' ? api + '/requests' : api + '/content/' + section;
+      const response = await fetch(endpoint, { credentials: 'include' });
+      if (!response.ok) throw new Error('Не удалось загрузить раздел.');
+      const data = await response.json();
+      if (section === 'requests') setReqs(data);
+      else {
+        setRows(data);
+        if (section === 'contacts') {
+          const row = data.find((item) => item.id === contactId) || data[0];
+          setEdit(row
+            ? { id: row.id, title: row.title, slug: row.slug, payload: { ...emptyPayload('contacts'), ...(row.payload || {}) }, published: row.published, sortOrder: row.sort_order }
+            : { title: 'Контакты', slug: 'contacts', payload: emptyPayload('contacts'), published: true, sortOrder: 0 });
+        }
+      }
+    } catch (loadError) {
+      setError(loadError.message);
+    }
+  }
+
+  async function loadLookups() {
+    try {
+      const types = ['categories', 'tags', 'specifications'];
+      const lookupRequests = types.map((type) => fetch(api + '/content/' + type, { credentials: 'include' }));
+      const needsMedia = ['products', 'services', 'works'].includes(section);
+      if (needsMedia) lookupRequests.push(fetch(api + '/media', { credentials: 'include' }));
+      const responses = await Promise.all(lookupRequests);
+      const data = await Promise.all(responses.map(async (response) => response.ok ? response.json() : []));
+      setCategories(data[0]);
+      setTags(data[1]);
+      setSpecifications(data[2]);
+      setMediaFiles(needsMedia ? data[3] : []);
+    } catch {
+      setError('Не удалось загрузить данные для формы.');
+    }
+  }
+
+  useEffect(() => {
+    setEdit(null);
+    if (section === 'overview' || section === 'password' || section === 'privacy-policy') {
+      setRows([]);
+      setReqs([]);
+      setError('');
+    } else {
+      load();
+    }
+  }, [section]);
+
+  useEffect(() => {
+    if (section !== 'requests') {
+      setMailStatus(null);
+      return;
+    }
+    let active = true;
+    const refreshMailStatus = async () => {
+      try {
+        const response = await fetch(api + '/mail-status', { credentials: 'include' });
+        if (!response.ok) throw new Error('status unavailable');
+        const status = await response.json();
+        if (active) setMailStatus(status);
+      } catch {
+        if (active) setMailStatus({ state: 'unknown' });
+      }
+    };
+    refreshMailStatus();
+    const timer = setInterval(refreshMailStatus, 15_000);
+    return () => { active = false; clearInterval(timer); };
+  }, [section]);
+
+  useEffect(() => {
+    if (edit && section !== 'contacts') loadLookups();
+  }, [Boolean(edit)]);
+
+  async function logout() {
+    await fetch(`${authApi}/logout`, { method: 'POST', credentials: 'include' });
+    location.assign('/admin/login');
+  }
+
+  function open(row, parentId = null) {
+    setError('');
+    setNotice('');
+    const payload = row ? { ...(row.payload || {}) } : { ...emptyPayload(section), ...(section === 'categories' ? { parentId } : {}) };
+    if (section === 'works' && !Array.isArray(payload.stages)) payload.stages = parseWorkStages(payload.content);
+    setEdit(row
+      ? { id: row.id, title: row.title, slug: row.slug, payload, published: row.published, sortOrder: row.sort_order }
+      : { title: '', slug: '', payload, published: false, sortOrder: 0 });
+  }
+
+  async function addFilter(title, valueType, unit, filterMode) {
+    title = title.trim();
+    if (!title || !slugify(title)) { setError('Укажите название фильтра.'); return false; }
+    setError('');
+    try {
+      const response = await fetch(api + '/content/specifications', {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, slug: slugify(title), payload: { valueType, unit: unit.trim(), filterMode }, published: true }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Не удалось добавить фильтр.');
+      setSpecifications((current) => [...current, { id: data.id, title, payload: { valueType, unit: unit.trim(), filterMode } }]);
+      setEdit((current) => ({ ...current, payload: { ...current.payload, filterSpecificationIds: [...(current.payload.filterSpecificationIds || []), data.id] } }));
+      return true;
+    } catch (err) { setError(err.message); return false; }
+  }
+
+  async function save(event) {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      if (edit.invalidJson) throw new Error('Исправьте JSON в поле расширенных данных.');
+      const payload = { ...edit.payload };
+      if (section === 'contacts') {
+        for (const key of ['legalName', 'inn', 'ogrn', 'legalAddress']) payload[key] = (payload[key] || '').trim();
+        if (payload.inn && !/^\d{10}$/.test(payload.inn)) throw new Error('ИНН организации должен содержать 10 цифр.');
+        if (payload.ogrn && !/^\d{13}$/.test(payload.ogrn)) throw new Error('ОГРН организации должен содержать 13 цифр.');
+      }
+      if (section === 'products') payload.variants = (payload.variants || []).map((variant) => ({ ...variant, priceRub: Number(variant.priceRub) }));
+      const body = { slug: edit.slug, title: edit.title, payload, published: edit.published, sortOrder: edit.sortOrder };
+      const response = await fetch(api + '/content/' + section + (edit.id ? '/' + edit.id : ''), {
+        method: edit.id ? 'PUT' : 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Не удалось сохранить запись.');
+      setNotice('Изменения сохранены.');
+      if (section !== 'contacts') setEdit(null);
+      load(section === 'contacts' ? edit.id : null);
+    } catch (saveError) {
+      setError(saveError.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(row) {
+    if (!confirm('Удалить «' + row.title + '»?')) return;
+    const response = await fetch(api + '/content/' + section + '/' + row.id, { method: 'DELETE', credentials: 'include' });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      setError(data.error || 'Не удалось удалить запись.');
+      return;
+    }
+    load();
+  }
+
+  async function updateStatus(id, status) {
+    const response = await fetch(api + '/requests/' + id, {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    if (!response.ok) setError('Не удалось изменить статус.');
+    else load();
+  }
+
+  async function uploadMedia(file) {
+    setError('');
+    setUploading(true);
+    try {
+      const response = await fetch(api + '/media', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': file.type, 'X-File-Name': encodeURIComponent(file.name) },
+        body: file,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Не удалось загрузить файл.');
+      setMediaFiles((current) => [data, ...current]);
+      setNotice('Файл загружен и добавлен к записи.');
+      return data;
+    } catch (uploadError) {
+      setError(uploadError.message || 'Не удалось загрузить файл.');
+      return null;
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function deleteMedia(file) {
+    if (!confirm(`Удалить файл «${file.name}»? Файл, который используется в записях, удалить нельзя.`)) return;
+    setError('');
+    try {
+      const response = await fetch(`${api}/media/${file.id}`, { method: 'DELETE', credentials: 'include' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Не удалось удалить файл.');
+      setMediaFiles((current) => current.filter((item) => item.id !== file.id));
+      setNotice('Файл удалён из медиатеки.');
+    } catch (deleteError) {
+      setError(deleteError.message || 'Не удалось удалить файл.');
+    }
+  }
+
+  const current = section === 'password' ? 'Смена пароля' : modules.find(([id]) => id === section)?.[1] || 'Обзор';
+  const isCreating = edit && !edit.id;
+
+  return (
+    <div className="admin-frame">
+      <aside className="admin-sidebar">
+        <a href="/" className="admin-brand sidebar-brand">
+          <img src="/logo-reference.png" alt="" />
+          <span>Уралмаш ГОО<small>Админ-панель</small></span>
+        </a>
+        <p className="nav-caption">Управление сайтом</p>
+        <nav className="admin-nav" aria-label="Разделы админ-панели">
+          <button className={'nav-item' + (section === 'overview' ? ' active' : '')} onClick={() => setSection('overview')}>Обзор</button>
+          {modules.map(([id, label]) => <button key={id} className={'nav-item' + (section === id ? ' active' : '')} onClick={() => setSection(id)}>{label}</button>)}
+          <button className={'nav-item' + (section === 'password' ? ' active' : '')} onClick={() => setSection('password')}>Смена пароля</button>
+        </nav>
+        <div className="sidebar-bottom"><span className="status-light" />Доступ: {username}</div>
+      </aside>
+
+      <main className="admin-main">
+        <header className="admin-topbar">
+          <div className="crumb">Админ-панель <span>/</span> {current}</div>
+          <div className="account"><span>{username}</span><button onClick={logout}>Выйти</button></div>
+        </header>
+
+        <div className="admin-content">
+          <div className="page-heading">
+            <div>
+              <p className="admin-eyebrow">Управление сайтом</p>
+              <h1>{current}</h1>
+              <p>{section === 'password' ? 'Подтверждение по почте и смена пароля администратора.' : section === 'overview' ? 'Разделы для управления сайтом.' : section === 'requests' ? 'В заявках указаны тема обращения и страница, с которой его отправили.' : section === 'contacts' ? 'Контактные данные на сайте.' : 'Записи раздела «' + current + '».'}</p>
+            </div>
+            {editable.includes(section) && section !== 'contacts' && <button className="admin-primary add-button" onClick={() => open(null)}>Добавить запись</button>}
+          </div>
+
+          {error && <div className="form-error admin-message" role="alert">{error}</div>}
+          {notice && <div className="admin-notice" role="status">{notice}<button onClick={() => setNotice('')} aria-label="Закрыть уведомление">×</button></div>}
+
+          {section === 'password' && <PasswordSettings />}
+          {section === 'privacy-policy' && <PrivacyPolicySettings />}
+
+          {section === 'overview' && (
+            <>
+              <section className="setup-banner">
+                <div className="banner-symbol">У</div>
+                <div><span>ПАНЕЛЬ УПРАВЛЕНИЯ</span><h2>Контент сайта в одном месте</h2><p>Управляйте каталогом, направлениями, проектами и обращениями.</p></div>
+                <div className="banner-line" />
+              </section>
+              <div className="module-grid">
+                {modules.map(([id, label]) => <button className="module-card module-button" key={id} onClick={() => setSection(id)}><h3>{label}</h3><p>Открыть раздел</p></button>)}
+              </div>
+            </>
+          )}
+
+          {edit && (
+            <form className="editor-card" onSubmit={save}>
+              <div className="editor-card__heading">
+                <div><h2>{section === 'contacts' ? 'Контактные данные' : isCreating ? 'Новая запись' : 'Редактирование'}</h2>{section !== 'contacts' && <p>Поля со звёздочкой обязательны.</p>}</div>
+                {section !== 'contacts' && <button type="button" onClick={() => setEdit(null)}>Закрыть</button>}
+              </div>
+              {section !== 'contacts' && <section className="editor-group">
+                <div className="editor-group__title"><h3>Основное</h3><p>Заголовок и адрес страницы записи.</p></div>
+                <div className="editor-grid">
+                  <FormField label="Название *" help="Отображается в заголовках и списках.">
+                    <input required value={edit.title} onChange={(event) => setEdit({ ...edit, title: event.target.value, slug: isCreating ? slugify(event.target.value) : edit.slug })} />
+                  </FormField>
+                  <FormField label="Адрес страницы *" help="Латиницей, без пробелов. Используется в ссылке.">
+                    <input required pattern="[a-z0-9]+(-[a-z0-9]+)*" value={edit.slug} onChange={(event) => setEdit({ ...edit, slug: event.target.value })} />
+                  </FormField>
+                </div>
+              </section>}
+
+              {section === 'contacts' && rows.length > 1 && <FormField label="Контактные данные">
+                <select value={edit.id || ''} onChange={(event) => open(rows.find((row) => row.id === Number(event.target.value)))}>
+                  {rows.map((row) => <option key={row.id} value={row.id}>{row.title}{row.published ? '' : ' (черновик)'}</option>)}
+                </select>
+              </FormField>}
+              <section className="editor-group">
+                <StructuredFields
+                  section={section}
+                  edit={edit}
+                  setEdit={setEdit}
+                  categories={categories}
+                  tags={tags}
+                  specifications={specifications}
+                  mediaFiles={mediaFiles}
+                  onUpload={uploadMedia}
+                  onDeleteMedia={deleteMedia}
+                  onOpenCategory={(row, parentId) => { if (confirm('При переходе несохранённые изменения категории будут потеряны. Продолжить?')) open(row, parentId); }}
+                  onAddFilter={addFilter}
+                />
+              </section>
+
+              {section !== 'contacts' && <section className="editor-group">
+                <div className="editor-group__title"><h3>Публикация</h3><p>Черновики не отображаются на публичном сайте.</p></div>
+                <label className="check-line">
+                  <input type="checkbox" checked={edit.published} onChange={(event) => setEdit({ ...edit, published: event.target.checked })} />
+                  <span><strong>Опубликовано</strong><small>Снимите отметку, чтобы сохранить запись как черновик.</small></span>
+                </label>
+                <FormField label="Порядок в списке" help="Чем меньше число, тем выше запись в списке.">
+                  <input type="number" value={edit.sortOrder} onChange={(event) => setEdit({ ...edit, sortOrder: event.target.value })} />
+                </FormField>
+              </section>}
+              {section === 'contacts' && <label className="check-line"><input type="checkbox" checked={edit.published} onChange={(event) => setEdit({ ...edit, published: event.target.checked })} /><span>Показывать на сайте</span></label>}
+
+              <div className="editor-actions">
+                <button className="admin-primary" disabled={busy || uploading}>{busy ? 'Сохраняем…' : uploading ? 'Загружается файл…' : 'Сохранить'}</button>
+                {section !== 'contacts' && <button type="button" onClick={() => setEdit(null)}>Отмена</button>}
+              </div>
+            </form>
+          )}
+
+          {section === 'requests' && (
+            <>
+              {mailStatus && <div className={'mail-status mail-status--' + mailStatus.state} role="status">
+                {mailStatus.state === 'disabled' && 'Почтовые уведомления выключены.'}
+                {mailStatus.state === 'incomplete' && 'Почтовые уведомления включены, настройки SMTP заполнены не полностью. Новые уведомления сохранены в очереди.'}
+                {mailStatus.state === 'retry_pending' && `Есть уведомления, ожидающие повторной отправки: ${mailStatus.count}.`}
+                {mailStatus.state === 'ready' && 'Настройки уведомлений заполнены; ожидающих повторной отправки нет.'}
+                {mailStatus.state === 'unknown' && 'Не удалось проверить состояние почтовых уведомлений.'}
+              </div>}
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>Тип</th><th>Тема</th><th>Страница</th><th>Имя и телефон</th><th>Комментарий</th><th>Дата обращения</th><th>Статус</th></tr></thead>
+                  <tbody>
+                    {reqs.map((request) => (
+                      <tr key={request.id}>
+                        <td>{requestIntentLabel(request.intent)}</td>
+                        <td>{request.subject_title || (request.intent === 'repair' ? 'Ремонт оборудования' : request.intent === 'project' ? 'Проектирование или изготовление' : request.intent === 'purchase' ? 'Оборудование' : 'Общий вопрос')}</td>
+                        <td>{request.source_path ? <a href={request.source_path} target="_blank" rel="noreferrer">{request.source_path}</a> : '—'}</td>
+                        <td><strong>{request.name}</strong><br />{request.phone}</td>
+                        <td>{request.message ? <details><summary>Читать</summary><p>{request.message}</p></details> : '—'}</td>
+                        <td>{new Date(request.created_at).toLocaleString('ru-RU')}</td>
+                        <td><select aria-label={`Статус заявки от ${request.name}`} value={request.status} onChange={(event) => updateStatus(request.id, event.target.value)}><option>Новая</option><option>В работе</option><option>Обработана</option></select></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {!reqs.length && <p className="empty-state">Обращений пока нет.</p>}
+              </div>
+            </>
+          )}
+
+          {editable.includes(section) && section !== 'contacts' && (
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>Название</th><th>Адрес</th><th>Статус</th><th>Действия</th></tr></thead>
+                <tbody>
+                  {rows.filter((row) => section !== 'categories' || !row.payload?.parentId).map((row) => (
+                    <tr key={row.id}>
+                      <td>{row.title}</td>
+                      <td><code>{row.slug}</code></td>
+                      <td>{row.published ? 'Опубликовано' : 'Черновик'}</td>
+                      <td><button type="button" onClick={() => open(row)}>Изменить</button><button type="button" onClick={() => remove(row)}>Удалить</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!rows.length && <p className="empty-state">Записей пока нет. Добавьте первую.</p>}
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
+  );
 }

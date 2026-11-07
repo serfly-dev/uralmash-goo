@@ -1,3 +1,22 @@
-export default function Home() {
-  return <main className="shell"><header className="brand"><img src="/logo-reference.png" alt="Уралмаш ГОО"/><span>Уралмаш ГОО</span></header><section><p className="eyebrow">ПРОЕКТ САЙТА</p><h1>Основа нового сайта<br/>Уралмаш ГОО</h1><p className="lead">Первичная настройка завершена. Административная панель доступна для входа.</p><div className="status"><span className="dot"/>Веб-приложение запущено</div><p><a className="admin-entry" href="/admin/login">Перейти к входу в админ-панель →</a></p></section><footer>React · Next.js · Express · SQLite</footer></main>;
+import { publicMetadata } from './lib/seo';
+import HomePageContent from './components/HomePageContent/HomePageContent';
+import { getServerPublicData } from './lib/server-public-data';
+
+export const metadata = publicMetadata('Уралмаш ГОО — горно-обогатительное оборудование', 'Проектирование, изготовление и продажа оборудования и линий для горно-обогатительной отрасли.', '');
+
+export default async function Home() {
+  const [products, categories, reviews, works, contacts] = await Promise.all([
+    getServerPublicData('/products'),
+    getServerPublicData('/categories'),
+    getServerPublicData('/reviews'),
+    getServerPublicData('/works'),
+    getServerPublicData('/contacts'),
+  ]);
+  return <HomePageContent
+    featuredProducts={products.data || []}
+    categories={categories.data || []}
+    reviews={reviews.data || []}
+    works={works.data || []}
+    contacts={contacts.data || []}
+  />;
 }

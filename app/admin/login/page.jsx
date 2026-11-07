@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { authApi } from '../../lib/api';
 
 export default function AdminLoginPage() {
   const [username, setUsername] = useState('');
@@ -13,7 +14,7 @@ export default function AdminLoginPage() {
     setError('');
     setBusy(true);
     try {
-      const response = await fetch('http://localhost:4000/api/auth/login', {
+      const response = await fetch(`${authApi}/login`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

@@ -1,0 +1,15 @@
+.page {
+  width: min(100% - 40px, 1100px);
+  margin: 0 auto;
+  padding: 64px 0 80px;
+}
+.page h1 {
+  margin: 0 0 32px;
+  color: var(--blue);
+  font: 700 clamp(30px, 4vw, 46px)/1.15 Manrope, Arial, sans-serif;
+}
+.text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
