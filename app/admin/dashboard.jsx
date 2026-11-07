@@ -231,6 +231,7 @@ function StructuredFields({ section, edit, setEdit, categories, tags, specificat
     return (
       <>
         {text('description', 'Описание товара', { multiline: true, help: 'Коротко опишите назначение и основные особенности оборудования.' })}
+        {!variants.length && <FormField label="Цена товара, ₽" help="Целое число. Оставьте пустым, если цена уточняется по запросу."><input type="number" min="0" step="1" value={payload.priceRub ?? ''} onChange={(event) => set('priceRub', event.target.value === '' ? null : Number(event.target.value))} /></FormField>}
         <label className="check-line">
           <input type="checkbox" checked={payload.featuredOnHome === true} onChange={(event) => set('featuredOnHome', event.target.checked)} />
           <span><strong>Показывать на главной</strong><small>В блок попадут до шести опубликованных товаров с фото.</small></span>
@@ -270,7 +271,7 @@ function StructuredFields({ section, edit, setEdit, categories, tags, specificat
             <div><h3>Варианты товара</h3><p>У каждого варианта свой адрес страницы, цена и артикул.</p></div>
             <button type="button" onClick={() => set('variants', [...variants, { name: '', slug: '', priceRub: '', article: '', characteristics: {}, media: [] }])}>Добавить вариант</button>
           </div>
-          {!variants.length && <p className="empty-state">Добавьте вариант: по нему будут показываться цена и страница товара.</p>}
+          {!variants.length && <p className="empty-state">Если у товара несколько исполнений, добавьте варианты с отдельными ценами.</p>}
           {variants.map((variant, index) => (
             <fieldset className="editor-fieldset variant-editor" key={index}>
               <legend>Вариант {index + 1}</legend>

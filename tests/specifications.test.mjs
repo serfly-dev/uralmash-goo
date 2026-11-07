@@ -20,11 +20,23 @@ test('existing product characteristics enter the common directory without alteri
   try {
     await start(); const cookie = await login(base, origin, dir);
     const headers = { origin, cookie, 'content-type':'application/json' };
-    const payload = { characteristics:{'Мощность':'до 15 кВт'}, variants:[{slug:'one', priceRub:100, characteristics:{'Масса':10}}] };
+    const payload = { priceRub:50, characteristics:{'Мощность':'до 15 кВт'}, variants:[{slug:'one', priceRub:100, characteristics:{'Масса':10}}] };
     const created = await fetch(`${base}/api/admin/content/products`, {method:'POST',headers,body:JSON.stringify({title:'Товар',slug:'test',payload,published:true})}); assert.equal(created.status,201);
-    const plain = await fetch(`${base}/api/admin/content/products`, {method:'POST',headers,body:JSON.stringify({title:'Без вариантов',slug:'plain',payload:{characteristics:{'Мощность':{min:5,max:10}},variants:[]},published:true})}); assert.equal(plain.status,201);
+    const plain = await fetch(`${base}/api/admin/content/products`, {method:'POST',headers,body:JSON.stringify({title:'Без вариантов',slug:'plain',payload:{priceRub:1499000,characteristics:{'Мощность':{min:5,max:10}},variants:[]},published:true})}); assert.equal(plain.status,201);
     const plainPage = await fetch(`${base}/api/public/products/plain/variants/default`); assert.equal(plainPage.status,200);
-    assert.deepEqual((await plainPage.json()).variant.characteristics['Мощность'], {min:5,max:10});
+    const plainData = await plainPage.json();
+    assert.deepEqual(plainData.variant.characteristics['Мощность'], {min:5,max:10});
+    assert.equal(plainData.product.priceFromRub,1499000);
+    assert.equal(plainData.variant.priceRub,1499000);
+    assert.equal((await (await fetch(`${base}/api/public/products/test`)).json()).product.priceFromRub,100);
+    for (const [slug, priceRub] of [['zero-price',0], ['no-price',null]]) {
+      const added=await fetch(`${base}/api/admin/content/products`, {method:'POST',headers,body:JSON.stringify({title:slug,slug,payload:{priceRub,variants:[]},published:true})}); assert.equal(added.status,201);
+      const result=await (await fetch(`${base}/api/public/products/${slug}/variants/default`)).json();
+      assert.equal(result.product.priceFromRub,priceRub); assert.equal(result.variant.priceRub,priceRub);
+    }
+    for (const priceRub of [-1, 1.5, '100']) {
+      const invalidPrice=await fetch(`${base}/api/admin/content/products`, {method:'POST',headers,body:JSON.stringify({title:'Неверная цена',slug:'bad-price',payload:{priceRub,variants:[]},published:true})}); assert.equal(invalidPrice.status,400);
+    }
     assert.equal((await fetch(`${base}/api/public/products/test/variants/default`)).status,404);
     const callback = await fetch(`${base}/api/callback`, {method:'POST',headers,body:JSON.stringify({name:'Тест',phone:'+79991234567',consent:true,intent:'purchase',productSlug:'plain',variantSlug:'default'})}); assert.equal(callback.status,201);
     const invalidRange = await fetch(`${base}/api/admin/content/products`, {method:'POST',headers,body:JSON.stringify({title:'Неверный диапазон',slug:'bad',payload:{characteristics:{'Объём':{min:10,max:5}},variants:[]}})}); assert.equal(invalidRange.status,400);
