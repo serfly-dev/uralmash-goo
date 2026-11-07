@@ -20,7 +20,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const fixedRoutes = ['', '/about', '/catalog', '/services', '/works', '/contacts', '/privacy-policy'];
   return [
     ...fixedRoutes.map((path) => ({ url: `${siteUrl}${path}`, changeFrequency: 'monthly' as const })),
-    ...products.data!.flatMap((product) => (product.variants || []).map((variant) => ({
+    ...products.data!.flatMap((product) => (product.variants?.length ? product.variants : [{ slug: 'default' }]).map((variant) => ({
       url: `${siteUrl}/catalog/product/${encodeURIComponent(product.slug)}/${encodeURIComponent(variant.slug)}`,
       ...(product.updatedAt ? { lastModified: product.updatedAt } : {}),
       changeFrequency: 'monthly' as const,

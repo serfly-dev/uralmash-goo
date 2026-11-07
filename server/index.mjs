@@ -669,7 +669,9 @@ function resolveRequestSubject(intent, body) {
       || typeof body.variantSlug !== 'string' || !slugPattern.test(body.variantSlug)) return null;
     const product = db.prepare("SELECT title, payload_json FROM admin_content WHERE type='products' AND slug=? AND published=1").get(body.productSlug);
     if (!product) return null;
-    const variant = (JSON.parse(product.payload_json).variants || []).find((item) => item.slug === body.variantSlug);
+    const variants = JSON.parse(product.payload_json).variants || [];
+    if (!variants.length && body.variantSlug === 'default') return product.title.slice(0, 400);
+    const variant = variants.find((item) => item.slug === body.variantSlug);
     if (!variant) return null;
     const variantName = typeof variant.name === 'string' && variant.name.trim() ? variant.name.trim() : variant.slug;
     return `${product.title} — ${variantName}`.slice(0, 400);
@@ -776,7 +778,8 @@ app.get('/api/public/products/:productSlug/variants/:variantSlug', (req,res)=>{
   const row=db.prepare("SELECT id,type,slug,title,payload_json,sort_order,updated_at FROM admin_content WHERE type='products' AND slug=? AND published=1").get(req.params.productSlug);
   if(!row)return res.sendStatus(404);
   const product=serializePublicProduct(row);
-  const variant=product.variants.find((item)=>item.slug===req.params.variantSlug);
+  const variant=product.variants.find((item)=>item.slug===req.params.variantSlug)
+    || (!product.variants.length && req.params.variantSlug==='default' ? {slug:'default', characteristics:product.characteristics, media:product.media} : null);
   if(!variant)return res.sendStatus(404);
   res.json({product,variant});
 });

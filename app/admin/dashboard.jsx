@@ -204,6 +204,7 @@ function StructuredFields({ section, edit, setEdit, categories, tags, specificat
       const type = specification.payload?.valueType || 'text';
       const selected = Object.hasOwn(value, title);
       const current = value[title];
+      const isRange = type === 'range' || (type === 'number' && current && typeof current === 'object');
       const label = title + (specification.payload?.unit ? ', ' + specification.payload.unit : '');
       return <div key={specification.id}>
         <label className="check-line check-line--compact"><input type="checkbox" checked={selected} onChange={(event) => {
@@ -212,9 +213,13 @@ function StructuredFields({ section, edit, setEdit, categories, tags, specificat
           else delete next[title];
           onChange(next);
         }} /><span>{label}</span></label>
-        {selected && (type === 'range' && current && typeof current === 'object' ? <div className="editor-grid">
-          {['min', 'max'].map((bound) => <FormField key={bound} label={label + (bound === 'min' ? ' — от' : ' — до')}><input type="number" step="any" required value={current[bound] ?? ''} onChange={(event) => onChange({ ...value, [title]: { ...current, [bound]: event.target.value === '' ? '' : Number(event.target.value) } })} /></FormField>)}
-        </div> : <FormField label={label}><input required type={type === 'number' ? 'number' : 'text'} step={type === 'number' ? 'any' : undefined} value={current ?? ''} onChange={(event) => onChange({ ...value, [title]: type === 'number' && event.target.value !== '' ? Number(event.target.value) : event.target.value })} /></FormField>)}
+        {selected && type === 'number' && <FormField label={'Формат значения: ' + label}><select value={isRange ? 'range' : 'number'} onChange={(event) => {
+          const nextValue = event.target.value === 'range' ? { min: current ?? '', max: current ?? '' } : (current?.min === current?.max ? current.min : '');
+          onChange({ ...value, [title]: nextValue });
+        }}><option value="number">Число</option><option value="range">Диапазон чисел</option></select></FormField>}
+        {selected && (isRange && current && typeof current === 'object' ? <div className="editor-grid">
+          {['min', 'max'].map((bound) => <FormField key={bound} label={label + (bound === 'min' ? ' — от' : ' — до')}><input type="number" step="any" required value={current[bound] ?? ''} onChange={(event) => onChange({ ...value, [title]: { ...current, [bound]: event.target.value } })} /></FormField>)}
+        </div> : <FormField label={label}><input required type={type === 'number' ? 'number' : 'text'} step={type === 'number' ? 'any' : undefined} value={current ?? ''} onChange={(event) => onChange({ ...value, [title]: event.target.value })} /></FormField>)}
       </div>;
     }) : <small>Сначала добавьте характеристики в соответствующем разделе.</small>}
   </fieldset>;
@@ -635,13 +640,24 @@ export default function AdminDashboard({ username }) {
         if (payload.ogrn && !/^\d{13}$/.test(payload.ogrn)) throw new Error('ОГРН организации должен содержать 13 цифр.');
       }
       if (section === 'products') {
-        for (const values of [payload.characteristics, ...(payload.variants || []).map((variant) => variant.characteristics)]) {
-          for (const value of Object.values(values || {})) {
-            if (value && typeof value === 'object' && (!Number.isFinite(value.min) || !Number.isFinite(value.max) || value.min > value.max)) throw new Error('Укажите корректные границы диапазона.');
+        const normalizeCharacteristics = (values = {}) => Object.fromEntries(Object.entries(values).map(([name, value]) => {
+          const type = specifications.find((specification) => specification.title === name)?.payload?.valueType;
+          if (value && typeof value === 'object') {
+            const min = value.min === '' ? NaN : Number(value.min);
+            const max = value.max === '' ? NaN : Number(value.max);
+            if (!Number.isFinite(min) || !Number.isFinite(max) || min > max) throw new Error('Укажите корректные границы диапазона.');
+            return [name, { min, max }];
           }
-        }
+          if (type === 'number' && value !== '') {
+            const number = Number(value);
+            if (!Number.isFinite(number)) throw new Error('Укажите корректное значение характеристики.');
+            return [name, number];
+          }
+          return [name, value];
+        }));
+        payload.characteristics = normalizeCharacteristics(payload.characteristics);
+        payload.variants = (payload.variants || []).map((variant) => ({ ...variant, priceRub: Number(variant.priceRub), characteristics: normalizeCharacteristics(variant.characteristics) }));
       }
-      if (section === 'products') payload.variants = (payload.variants || []).map((variant) => ({ ...variant, priceRub: Number(variant.priceRub) }));
       const body = { slug: edit.slug, title: edit.title, payload, published: edit.published, sortOrder: edit.sortOrder };
       const response = await fetch(api + '/content/' + section + (edit.id ? '/' + edit.id : ''), {
         method: edit.id ? 'PUT' : 'POST',

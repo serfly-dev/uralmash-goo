@@ -55,9 +55,7 @@ type ProductCardProps = {
 
 export default function ProductCard({ product, category }: ProductCardProps) {
   const variant = product.variants?.[0];
-  const href = variant
-    ? `/catalog/product/${encodeURIComponent(product.slug)}/${encodeURIComponent(variant.slug)}`
-    : '/catalog/';
+  const href = `/catalog/product/${encodeURIComponent(product.slug)}/${encodeURIComponent(variant?.slug || 'default')}`;
   const image = getProductImage(product, variant);
   const price = product.priceFromRub ?? product.variants?.reduce<number | null>((lowest, item) =>
     typeof item.priceRub === 'number' ? (lowest === null ? item.priceRub : Math.min(lowest, item.priceRub)) : lowest, null);

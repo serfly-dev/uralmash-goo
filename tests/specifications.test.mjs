@@ -22,6 +22,11 @@ test('existing product characteristics enter the common directory without alteri
     const headers = { origin, cookie, 'content-type':'application/json' };
     const payload = { characteristics:{'Мощность':'до 15 кВт'}, variants:[{slug:'one', priceRub:100, characteristics:{'Масса':10}}] };
     const created = await fetch(`${base}/api/admin/content/products`, {method:'POST',headers,body:JSON.stringify({title:'Товар',slug:'test',payload,published:true})}); assert.equal(created.status,201);
+    const plain = await fetch(`${base}/api/admin/content/products`, {method:'POST',headers,body:JSON.stringify({title:'Без вариантов',slug:'plain',payload:{characteristics:{'Мощность':{min:5,max:10}},variants:[]},published:true})}); assert.equal(plain.status,201);
+    const plainPage = await fetch(`${base}/api/public/products/plain/variants/default`); assert.equal(plainPage.status,200);
+    assert.deepEqual((await plainPage.json()).variant.characteristics['Мощность'], {min:5,max:10});
+    assert.equal((await fetch(`${base}/api/public/products/test/variants/default`)).status,404);
+    const callback = await fetch(`${base}/api/callback`, {method:'POST',headers,body:JSON.stringify({name:'Тест',phone:'+79991234567',consent:true,intent:'purchase',productSlug:'plain',variantSlug:'default'})}); assert.equal(callback.status,201);
     const invalidRange = await fetch(`${base}/api/admin/content/products`, {method:'POST',headers,body:JSON.stringify({title:'Неверный диапазон',slug:'bad',payload:{characteristics:{'Объём':{min:10,max:5}},variants:[]}})}); assert.equal(invalidRange.status,400);
     await stop(); await start();
     const specs = await (await fetch(`${base}/api/public/specifications`)).json();
@@ -35,6 +40,6 @@ test('existing product characteristics enter the common directory without alteri
     assert.equal(products[0].variants[0].characteristics['Масса'], 10);
     await stop(); await start();
     assert.equal((await (await fetch(`${base}/api/public/specifications`)).json()).length, 2);
-    const db = new DatabaseSync(join(dir,'test.sqlite'), {readOnly:true}); assert.equal(db.prepare("SELECT payload_json FROM admin_content WHERE type='products'").get().payload_json,JSON.stringify(payload)); db.close();
+    const db = new DatabaseSync(join(dir,'test.sqlite'), {readOnly:true}); assert.equal(db.prepare("SELECT payload_json FROM admin_content WHERE type='products' AND slug='test'").get().payload_json,JSON.stringify(payload)); db.close();
   } finally { await stop(); await rm(dir,{recursive:true,force:true}); }
 });
