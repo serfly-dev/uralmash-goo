@@ -1,0 +1,35 @@
+.banner {
+  position: fixed;
+  z-index: 100;
+  right: 24px;
+  bottom: 24px;
+  left: 24px;
+  display: flex;
+  max-width: 760px;
+  gap: 20px;
+  align-items: center;
+  margin: 0 auto;
+  padding: 20px 24px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 8px 30px rgb(29 38 57 / 15%);
+}
+
+.banner p { margin: 0; }
+.banner a { color: var(--blue); text-decoration: underline; }
+.banner button {
+  flex: none;
+  min-height: 44px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--blue);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .banner { right: 12px; bottom: 12px; left: 12px; flex-direction: column; align-items: stretch; gap: 12px; padding: 16px; font-size: 14px; }
+}

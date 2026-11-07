@@ -1,5 +1,6 @@
 import './globals.css';
 import RequestModalProvider from './components/RequestModal/RequestModal';
+import CookieBanner from './components/CookieBanner/CookieBanner';
 import { getSiteUrl } from './lib/server-public-data';
 
 const siteUrl = getSiteUrl();
@@ -11,5 +12,5 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }) {
-  return <html lang="ru"><body><RequestModalProvider>{children}</RequestModalProvider></body></html>;
+  return <html lang="ru"><body><RequestModalProvider>{children}<CookieBanner /></RequestModalProvider></body></html>;
 }
