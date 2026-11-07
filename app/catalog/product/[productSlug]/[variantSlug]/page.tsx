@@ -1,6 +1,7 @@
 import { publicMetadata } from '../../../../lib/seo';
 import { notFound } from 'next/navigation';
 import ProductPageContent, { type ProductPageInitialData } from '../../../../components/ProductPageContent/ProductPageContent';
+import type { FilterSpecification } from '../../../../components/CatalogPage/CatalogPage';
 import { getProductImage, type ProductRecord, type ProductCategory } from '../../../../components/ProductCard/ProductCard';
 import { assertPublicDataAvailable, getServerPublicData, getSiteUrl } from '../../../../lib/server-public-data';
 
@@ -10,10 +11,11 @@ type ProductResponse = { product: ProductPageInitialData['product']; variant: Pr
 
 async function loadProduct(productSlug: string, variantSlug: string): Promise<ProductPageInitialData | null> {
   const productPath = `/products/${encodeURIComponent(productSlug)}/variants/${encodeURIComponent(variantSlug)}`;
-  const [productResult, categoriesResult, productsResult] = await Promise.all([
+  const [productResult, categoriesResult, productsResult, specificationsResult] = await Promise.all([
     getServerPublicData<ProductResponse>(productPath),
     getServerPublicData<ProductCategory[]>('/categories'),
     getServerPublicData<ProductRecord[]>('/products'),
+    getServerPublicData<FilterSpecification[]>('/specifications'),
   ]);
   if (productResult.status === 404) return null;
   assertPublicDataAvailable(productResult, 'product variant');
@@ -21,6 +23,7 @@ async function loadProduct(productSlug: string, variantSlug: string): Promise<Pr
     ...productResult.data,
     categories: categoriesResult.data || [],
     products: productsResult.data || [],
+    specifications: specificationsResult.data || [],
   };
 }
 

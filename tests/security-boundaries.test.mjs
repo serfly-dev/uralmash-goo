@@ -1,3 +1,4 @@
+import { mailPreload, mailEnv, login } from './helpers/auth.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, copyFile, symlink, rm } from 'node:fs/promises';
@@ -15,8 +16,8 @@ test('origin and upload limits protect the API', async (t) => {
   await symlink(resolve('node_modules'), join(dir, 'node_modules'));
   const listener = net.createServer(); await new Promise(r => listener.listen(0, '127.0.0.1', r));
   const port = listener.address().port; await new Promise(r => listener.close(r));
-  const origin = 'http://localhost:3000';
-  const child = spawn(process.execPath, ['server/index.mjs'], { cwd:dir, stdio: 'ignore', env: { ...process.env, NODE_ENV:'development', API_HOST:'127.0.0.1', API_PORT:String(port), SQLITE_PATH:join(dir,'test.sqlite'), REQUEST_ENCRYPTION_KEY:'a'.repeat(64), ADMIN_USERNAME:'tester', ADMIN_PASSWORD:'old-password-123', APP_ORIGIN:origin, MAIL_NOTIFICATIONS_ENABLED:'false' } });
+  const origin = 'https://example.test';
+  const child = spawn(process.execPath, ['--import', mailPreload, 'server/index.mjs'], { cwd:dir, stdio: 'ignore', env: { ...process.env, NODE_ENV:'development', API_HOST:'127.0.0.1', API_PORT:String(port), SQLITE_PATH:join(dir,'test.sqlite'), REQUEST_ENCRYPTION_KEY:'a'.repeat(64), ADMIN_USERNAME:'tester', ADMIN_PASSWORD:'old-password-123', APP_ORIGIN:origin, ...mailEnv(dir) } });
   const base = `http://127.0.0.1:${port}`;
   const open = [];
   try {
@@ -26,8 +27,7 @@ test('origin and upload limits protect the API', async (t) => {
       assert.equal(response.status,403);
       assert.equal(response.headers.get('access-control-allow-origin'),null);
     });
-    const login = await fetch(`${base}/api/auth/login`, { method:'POST', headers:{origin,'content-type':'application/json'}, body:JSON.stringify({username:'tester',password:'old-password-123'}) });
-    assert.equal(login.status,200); const cookie=login.headers.get('set-cookie').split(';')[0];
+    const cookie = await login(base, origin, dir);
     await t.test('limits body buffering and releases slots after abort', async () => {
       for (let i=0;i<2;i++) {
         const req=http.request(`${base}/api/admin/media`, { method:'POST', headers:{origin,cookie,'content-type':'video/mp4','content-length':'100000'} });

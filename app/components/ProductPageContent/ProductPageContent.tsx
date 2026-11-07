@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import ProductCard, { getProductImage, type ProductCategory, type ProductRecord, type ProductVariant } from '../ProductCard/ProductCard';
 import { apiOrigin, publicApi } from '../../lib/api';
 import { RequestButton } from '../RequestModal/RequestModal';
+import type { FilterSpecification } from '../CatalogPage/CatalogPage';
 
 type ProductPageData = {
   product: ProductRecord;
@@ -15,6 +16,7 @@ type ProductPageData = {
 export type ProductPageInitialData = ProductPageData & {
   categories: ProductCategory[];
   products: ProductRecord[];
+  specifications?: FilterSpecification[];
 };
 
 function formatPrice(price: number) {
@@ -25,6 +27,7 @@ export default function ProductPage({ productSlug, variantSlug, initialData }: {
   const [data, setData] = useState<ProductPageData | null>(initialData || null);
   const [categories, setCategories] = useState<ProductCategory[]>(initialData?.categories || []);
   const [products, setProducts] = useState<ProductRecord[]>(initialData?.products || []);
+  const [specifications, setSpecifications] = useState<FilterSpecification[]>(initialData?.specifications || []);
   const [hasError, setHasError] = useState(false);
   const [mediaIndex, setMediaIndex] = useState(0);
 
@@ -34,22 +37,25 @@ export default function ProductPage({ productSlug, variantSlug, initialData }: {
 
     async function loadProduct() {
       try {
-        const [productResponse, categoriesResponse, productsResponse] = await Promise.all([
+        const [productResponse, categoriesResponse, productsResponse, specificationsResponse] = await Promise.all([
           fetch(`${publicApi}/products/${encodeURIComponent(productSlug)}/variants/${encodeURIComponent(variantSlug)}`, { signal: controller.signal }),
           fetch(`${publicApi}/categories`, { signal: controller.signal }).catch(() => null),
           fetch(`${publicApi}/products`, { signal: controller.signal }).catch(() => null),
+          fetch(`${publicApi}/specifications`, { signal: controller.signal }).catch(() => null),
         ]);
         if (!productResponse.ok) throw new Error('Товар не найден.');
 
-        const [productData, allCategories, allProducts] = await Promise.all([
+        const [productData, allCategories, allProducts, allSpecifications] = await Promise.all([
           productResponse.json(),
           categoriesResponse?.ok ? categoriesResponse.json() : Promise.resolve([]),
           productsResponse?.ok ? productsResponse.json() : Promise.resolve([]),
+          specificationsResponse?.ok ? specificationsResponse.json() : Promise.resolve([]),
         ]);
 
         setData(productData);
         setCategories(Array.isArray(allCategories) ? allCategories : []);
         setProducts(Array.isArray(allProducts) ? allProducts : []);
+        setSpecifications(Array.isArray(allSpecifications) ? allSpecifications : []);
       } catch (error) {
         if (error instanceof Error && error.name !== 'AbortError') setHasError(true);
       }
@@ -147,7 +153,7 @@ export default function ProductPage({ productSlug, variantSlug, initialData }: {
                 {characteristics.map(([name, value]) => (
                   <div className={ProductPageContentStyles["product-page__fact"]} key={name}>
                     <dt>{name}</dt>
-                    <dd>{String(value)}</dd>
+                    <dd>{value && typeof value === 'object' ? `${value.min}–${value.max}` : String(value)}{specifications.find((item) => item.title === name)?.payload?.unit ? ` ${specifications.find((item) => item.title === name)?.payload?.unit}` : ''}</dd>
                   </div>
                 ))}
               </dl>

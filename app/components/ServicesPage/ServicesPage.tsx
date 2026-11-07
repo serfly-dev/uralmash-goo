@@ -44,8 +44,6 @@ export default function ServicesPage({ slug, initialServices, initialError = fal
     return () => controller.abort();
   }, [initialError, initialServices]);
 
-  const mainServiceSlugs = ['proektirovanie-oborudovaniya', 'izgotovlenie-oborudovaniya', 'prodazha-oborudovaniya'];
-  const additionalServices = services?.filter((item) => !mainServiceSlugs.includes(item.slug)) || [];
   const service = slug ? services?.find((item) => item.slug === slug) : undefined;
   const description = service?.payload?.description?.trim() || '';
   const content = service?.payload?.content?.trim() || '';
@@ -111,45 +109,10 @@ export default function ServicesPage({ slug, initialServices, initialError = fal
                 <p className={"services-page__eyebrow" + " " + ServicesPageStyles["services-page__eyebrow"]}>ОТ ЗАДАЧИ ДО ПОСТАВКИ</p>
                 <h2 id="repair-heading">Направления работы</h2>
               </div>
+              {!hasError && services?.length === 0 && <p>Пока нет опубликованных направлений.</p>}
               <ul className={"services-page__equipment-list" + " " + ServicesPageStyles["services-page__equipment-list"]}>
-                {[
-                  {
-                    slug: 'proektirovanie-oborudovaniya',
-                    title: 'Проектирование оборудования и линий',
-                    paragraphs: [
-                      'Проектирование начинается с задачи заказчика и исходных данных: вида материала, требуемой производительности, условий размещения и состава существующей технологической цепочки. Эти сведения помогают определить назначение оборудования и требования к будущей линии.',
-                      'На этапе проработки обсуждаются компоновка, основные узлы и взаимодействие оборудования. Состав проектных работ зависит от задачи и согласовывается при обращении.',
-                    ],
-                  },
-                  {
-                    slug: 'izgotovlenie-oborudovaniya',
-                    title: 'Изготовление оборудования',
-                    paragraphs: [
-                      'Изготавливаем оборудование для дробления, сортировки и обогащения. Это могут быть отдельные машины и узлы или оборудование для технологической линии — в зависимости от согласованного проекта и комплектации.',
-                      'При запросе укажите назначение оборудования, параметры перерабатываемого материала и необходимые характеристики. Если есть чертежи или техническое задание, приложите их при дальнейшем обсуждении.',
-                    ],
-                  },
-                  {
-                    slug: 'prodazha-oborudovaniya',
-                    title: 'Продажа оборудования и линий',
-                    paragraphs: [
-                      'Поставляем оборудование и дробильно-сортировочные и обогатительные линии. В каталоге можно ознакомиться с доступными позициями и вариантами исполнения; состав поставки и характеристики уточняются по запросу.',
-                      'Чтобы обсудить подходящее оборудование, сообщите материал, требуемую производительность и условия эксплуатации. Если выбираете замену существующей машины, полезны её модель, размеры и параметры подключения.',
-                    ],
-                  },
-                ].map((item, index) => {
-                  const published = services?.find((entry) => entry.slug === item.slug);
-                  return <li className={"services-page__direction-card" + " " + ServicesPageStyles["services-page__direction-card"]} key={item.slug}>
-                    <span>0{index + 1}</span>
-                    <h3>{published?.title || item.title}</h3>
-                    <div>
-                      {item.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
-                      {published && <a className={ServicesPageStyles["services-page__direction-link"]} href={`/services/${encodeURIComponent(published.slug)}/`}>Подробнее о направлении</a>}
-                    </div>
-                  </li>;
-                })}
-                {additionalServices.map((item, index) => <li className={"services-page__direction-card" + " " + ServicesPageStyles["services-page__direction-card"]} key={item.id}>
-                  <span>{String(index + 4).padStart(2, '0')}</span>
+                {(services || []).map((item, index) => <li className={"services-page__direction-card" + " " + ServicesPageStyles["services-page__direction-card"]} key={item.id}>
+                  <span>{String(index + 1).padStart(2, '0')}</span>
                   <h3>{item.title}</h3>
                   <div>
                     {item.payload?.description && <p>{item.payload.description}</p>}

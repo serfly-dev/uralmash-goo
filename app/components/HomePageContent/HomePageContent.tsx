@@ -304,6 +304,7 @@ export default function HomePageContent({ featuredProducts, categories, reviews,
             <h2 className={HomePageContentStyles["home-repair__heading"]} id="home-repair-heading">От оборудования до производственной линии</h2>
             <p className={HomePageContentStyles["home-repair__description"]}>Проектируем, изготавливаем и продаём дробильно-сортировочное оборудование и обогатительные линии.</p>
             <RequestButton className={HomePageContentStyles["home-repair__action"]} intent="project">Обсудить проект</RequestButton>
+            <a className={[HomePageContentStyles["home-repair__action"], HomePageContentStyles["home-repair__link"]].join(' ')} href="/services/">Все направления</a>
           </article>
           <figure className={HomePageContentStyles["home-repair__figure"]}>
             <img

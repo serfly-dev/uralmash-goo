@@ -1,3 +1,4 @@
+import { mailPreload, mailEnv, login } from './helpers/auth.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, copyFile, symlink, rm } from 'node:fs/promises';
@@ -10,13 +11,12 @@ test('legal contact details are editable, public only when published, and valida
   const dir=await mkdtemp(join(tmpdir(),'legal-contacts-'));
   await mkdir(join(dir,'server')); await copyFile(resolve('server/index.mjs'),join(dir,'server/index.mjs')); await symlink(resolve('node_modules'),join(dir,'node_modules'));
   const listener=net.createServer(); await new Promise(r=>listener.listen(0,'127.0.0.1',r)); const port=listener.address().port; await new Promise(r=>listener.close(r));
-  const origin='http://localhost:3000', base=`http://127.0.0.1:${port}`;
-  const child=spawn(process.execPath,['server/index.mjs'],{cwd:dir,stdio:'ignore',env:{...process.env,NODE_ENV:'development',API_HOST:'127.0.0.1',API_PORT:String(port),SQLITE_PATH:join(dir,'test.sqlite'),REQUEST_ENCRYPTION_KEY:'a'.repeat(64),ADMIN_USERNAME:'tester',ADMIN_PASSWORD:'old-password-123',APP_ORIGIN:origin,MAIL_NOTIFICATIONS_ENABLED:'false'}});
+  const origin='https://example.test', base=`http://127.0.0.1:${port}`;
+  const child=spawn(process.execPath,['--import', mailPreload, 'server/index.mjs'],{cwd:dir,stdio:'ignore',env:{...process.env,NODE_ENV:'development',API_HOST:'127.0.0.1',API_PORT:String(port),SQLITE_PATH:join(dir,'test.sqlite'),REQUEST_ENCRYPTION_KEY:'a'.repeat(64),ADMIN_USERNAME:'tester',ADMIN_PASSWORD:'old-password-123',APP_ORIGIN:origin,...mailEnv(dir)}});
   try {
     for(let i=0;i<100;i++){try{await fetch(`${base}/api/auth/me`);break;}catch{if(i===99)throw new Error('server did not start');await new Promise(r=>setTimeout(r,50));}}
     const headers={origin,'content-type':'application/json'};
-    const login=await fetch(`${base}/api/auth/login`,{method:'POST',headers,body:JSON.stringify({username:'tester',password:'old-password-123'})}); assert.equal(login.status,200);
-    headers.cookie=login.headers.get('set-cookie').split(';')[0];
+    headers.cookie = await login(base, origin, dir);
     const payload={legalName:'ООО «Пример»',inn:'1234567890',ogrn:'1234567890123',legalAddress:'г. Екатеринбург, ул. Примерная, 1'};
     const body={slug:'contacts',title:'Контакты',payload,published:true};
     const created=await fetch(`${base}/api/admin/content/contacts`,{method:'POST',headers,body:JSON.stringify(body)}); assert.equal(created.status,201); const {id}=await created.json();

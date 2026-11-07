@@ -36,7 +36,8 @@ if (process.env.MAIL_NOTIFICATIONS_ENABLED && !['true', 'false'].includes(proces
   const valid = Number.isInteger(port) && port >= 1 && port <= 65535
     && ['true', 'false'].includes(secureValue)
     && emailPattern.test(process.env.SMTP_FROM) && emailPattern.test(process.env.SMTP_TO)
-    && configuredOrigin?.protocol === 'https:' && configuredOrigin.origin === appOrigin;
+    && (configuredOrigin?.protocol === 'https:' || (!isProduction && configuredOrigin?.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(configuredOrigin.hostname)))
+    && configuredOrigin.origin === appOrigin;
   if (valid) {
     mailSettings = {
       host: process.env.SMTP_HOST,
@@ -48,7 +49,7 @@ if (process.env.MAIL_NOTIFICATIONS_ENABLED && !['true', 'false'].includes(proces
       adminUrl: `${configuredOrigin.origin}/admin`,
     };
   } else {
-    console.warn('Mail notifications are disabled: SMTP settings or HTTPS APP_ORIGIN are invalid.');
+    console.warn('Mail notifications are disabled: SMTP settings or APP_ORIGIN are invalid.');
   }
 }
 const mailTransport = mailSettings ? nodemailer.createTransport({
@@ -138,6 +139,29 @@ db.exec(`
     created_at TEXT NOT NULL
   );
 `);
+// Preserve existing product values while making their names available in the shared directory.
+{
+  const known = new Set(db.prepare("SELECT title FROM admin_content WHERE type='specifications'").all().map((row) => row.title));
+  const values = new Map();
+  for (const row of db.prepare("SELECT payload_json FROM admin_content WHERE type='products'").all()) {
+    const product = JSON.parse(row.payload_json);
+    for (const characteristics of [product.characteristics, ...(Array.isArray(product.variants) ? product.variants.map((variant) => variant?.characteristics) : [])]) {
+      if (!characteristics || typeof characteristics !== 'object' || Array.isArray(characteristics)) continue;
+      for (const [title, value] of Object.entries(characteristics)) {
+        if (!title.trim() || known.has(title) || value == null || value === '') continue;
+        const type = typeof value === 'number' && Number.isFinite(value) ? 'number' : 'text';
+        values.set(title, values.has(title) && values.get(title) !== type ? 'text' : type);
+      }
+    }
+  }
+  const insert = db.prepare("INSERT OR IGNORE INTO admin_content(type,slug,title,payload_json,published,sort_order,created_at,updated_at) VALUES('specifications',?,?,?,1,0,?,?)");
+  const now = new Date().toISOString();
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    for (const [title, valueType] of values) insert.run(`existing-${createHash('sha256').update(title).digest('hex')}`, title, JSON.stringify({ valueType, unit: '', filterMode: 'values' }), now, now);
+    db.exec('COMMIT');
+  } catch (error) { db.exec('ROLLBACK'); throw error; }
+}
 if (mailEnabled) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS callback_mail_outbox (
@@ -206,6 +230,7 @@ if (!hasAdmin && username && password && isProduction && password.length < 12) {
   throw new Error('ADMIN_PASSWORD must contain at least 12 characters in production.');
 }
 if (username && password && !hasAdmin) {
+  if (!/^[A-Za-z0-9!@#$%^&*()_+\-=\[\]{};:,.?]+$/.test(password)) throw new Error('ADMIN_PASSWORD contains unsupported characters.');
   const salt = 'bcrypt-sha256';
   const passwordHash = bcrypt.hashSync(createHash('sha256').update(password).digest('base64'), 12);
   db.prepare('INSERT INTO admin_account (id, username, password_hash, password_salt, created_at) VALUES (1, ?, ?, ?, ?)')
@@ -308,6 +333,7 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 const attempts = new Map();
+const loginChallenges = new Map();
 let activePasswordChecks = 0;
 let activeImageProcesses = 0;
 const loginWindowMs = 15 * 60 * 1000;
@@ -370,7 +396,38 @@ app.post('/api/auth/login', async (req, res) => {
   if (!valid) {
     return res.status(401).json({ error: 'Неверный логин или пароль.' });
   }
-  attempts.delete(ip);
+  if (!mailTransport) return res.status(503).json({ error: 'Почта не настроена. Вход временно недоступен.' });
+  for (const [key, pending] of loginChallenges) if (pending.expires <= now) loginChallenges.delete(key);
+  if (loginChallenges.size >= maxTrackedLoginIps) return res.status(503).json({ error: 'Сервер занят. Повторите попытку позже.' });
+  const challenge = randomBytes(32).toString('base64url');
+  const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+  const pending = { hash: createHmac('sha256', rateLimitKey).update(challenge + code).digest(), expires: Date.now() + 10 * 60_000, attempts: 0, username: account.username, passwordHash: account.password_hash, passwordSalt: account.password_salt };
+  loginChallenges.set(hashToken(challenge), pending);
+  try {
+    await mailTransport.sendMail({ from: mailSettings.from, to: mailSettings.to, subject: 'Код для входа в админ-панель', text: `Код для входа в админ-панель: ${code}\nКод действует 10 минут. Если вы не пытались войти, проигнорируйте письмо.` });
+    return res.json({ challenge });
+  } catch {
+    loginChallenges.delete(hashToken(challenge));
+    return res.status(503).json({ error: 'Не удалось отправить код. Попробуйте позже.' });
+  }
+});
+app.post('/api/auth/login/verify', (req, res) => {
+  if (!isAllowedOrigin(req.headers.origin)) return res.sendStatus(403);
+  const { challenge, code } = req.body || {};
+  if (typeof challenge !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(challenge)) return res.status(403).json({ error: 'Код недействителен или истёк. Войдите заново.' });
+  const key = hashToken(challenge);
+  const pending = loginChallenges.get(key);
+  if (!pending || pending.expires <= Date.now()) { loginChallenges.delete(key); return res.status(403).json({ error: 'Код недействителен или истёк. Войдите заново.' }); }
+  pending.attempts++;
+  const validCode = typeof code === 'string' && /^\d{6}$/.test(code) && timingSafeEqual(createHmac('sha256', rateLimitKey).update(challenge + code).digest(), pending.hash);
+  if (!validCode) {
+    if (pending.attempts >= 5) loginChallenges.delete(key);
+    return res.status(400).json({ error: 'Неверный код. Проверьте письмо.' });
+  }
+  loginChallenges.delete(key);
+  const account = db.prepare('SELECT username FROM admin_account WHERE id=1 AND username=? AND password_hash=? AND password_salt=?').get(pending.username, pending.passwordHash, pending.passwordSalt);
+  if (!account) return res.status(403).json({ error: 'Данные для входа изменились. Войдите заново.' });
+  attempts.delete(req.ip);
   const token = randomBytes(32).toString('base64url');
   const createdAt = new Date();
   const expiresAt = new Date(createdAt.getTime() + 12 * 60 * 60 * 1000);
@@ -384,16 +441,19 @@ const passwordChallenges = new Map();
 let lastPasswordCodeRequest = 0;
 app.post('/api/auth/password/code', requireAdmin, async (req, res) => {
   if (!isAllowedOrigin(req.headers.origin)) return res.sendStatus(403);
+  const purpose = req.body?.purpose ?? 'password';
+  if (!['password', 'username'].includes(purpose)) return res.status(400).json({ error: 'Неизвестная операция.' });
   if (!mailTransport) return res.status(503).json({ error: 'Почта не настроена. Обратитесь к администратору сервера.' });
   const now = Date.now();
   if (now - lastPasswordCodeRequest < 60_000) return res.status(429).json({ error: 'Повторно запросить код можно через минуту.' });
   lastPasswordCodeRequest = now;
   for (const [session, pending] of passwordChallenges) if (pending.expires <= now) passwordChallenges.delete(session);
   const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
-  const challenge = { session: req.adminSession.tokenHash, hash: createHmac('sha256', rateLimitKey).update(code).digest(), expires: now + 10 * 60_000, attempts: 0, verified: false };
+  const challenge = { session: req.adminSession.tokenHash, purpose, hash: createHmac('sha256', rateLimitKey).update(code).digest(), expires: now + 10 * 60_000, attempts: 0, verified: false };
   passwordChallenges.set(challenge.session, challenge);
   try {
-    await mailTransport.sendMail({ from: mailSettings.from, to: mailSettings.to, subject: 'Код для смены пароля', text: `Код для смены пароля администратора: ${code}\nКод действует 10 минут. Если вы не запрашивали смену пароля, проигнорируйте письмо.` });
+    const label = purpose === 'username' ? 'логина' : 'пароля';
+    await mailTransport.sendMail({ from: mailSettings.from, to: mailSettings.to, subject: `Код для смены ${label}`, text: `Код для смены ${label} администратора: ${code}\nКод действует 10 минут. Если вы не запрашивали смену ${label}, проигнорируйте письмо.` });
     if (passwordChallenges.get(challenge.session) !== challenge) return res.status(409).json({ error: 'Запрос устарел. Запросите код снова.' });
     res.json({ ok: true });
   } catch {
@@ -418,9 +478,9 @@ app.post('/api/auth/password/verify', requireAdmin, (req, res) => {
 app.post('/api/auth/password/change', requireAdmin, async (req, res) => {
   if (!isAllowedOrigin(req.headers.origin)) return res.sendStatus(403);
   const challenge = passwordChallenges.get(req.adminSession.tokenHash);
-  if (!challenge || challenge.session !== req.adminSession.tokenHash || !challenge.verified || challenge.expires <= Date.now()) return res.status(403).json({ error: 'Подтвердите смену пароля кодом из письма.' });
+  if (!challenge || challenge.purpose !== 'password' || challenge.session !== req.adminSession.tokenHash || !challenge.verified || challenge.expires <= Date.now()) return res.status(403).json({ error: 'Подтвердите смену пароля кодом из письма.' });
   const { currentPassword, newPassword } = req.body || {};
-  if (typeof currentPassword !== 'string' || currentPassword.length > 256 || typeof newPassword !== 'string' || newPassword.length < 12 || newPassword.length > 256) return res.status(400).json({ error: 'Новый пароль должен содержать от 12 до 256 символов.' });
+  if (typeof currentPassword !== 'string' || currentPassword.length > 256 || typeof newPassword !== 'string' || !/^[A-Za-z0-9!@#$%^&*()_+\-=\[\]{};:,.?]{12,256}$/.test(newPassword)) return res.status(400).json({ error: 'Пароль должен содержать 12–256 символов: латинские буквы, цифры и знаки !@#$%^&*()_+-=[]{};:,.?' });
   if (challenge.checking) return res.status(429).json({ error: 'Дождитесь завершения проверки.' });
   if (activePasswordChecks >= 4) return res.status(503).json({ error: 'Сервер занят. Повторите попытку позже.' });
   challenge.checking = true;
@@ -449,6 +509,38 @@ app.post('/api/auth/password/change', requireAdmin, async (req, res) => {
   } catch { res.status(500).json({ error: 'Не удалось изменить пароль.' }); }
   finally { challenge.checking = false; activePasswordChecks--; }
 });
+app.post('/api/auth/username/change', requireAdmin, async (req, res) => {
+  if (!isAllowedOrigin(req.headers.origin)) return res.sendStatus(403);
+  const challenge = passwordChallenges.get(req.adminSession.tokenHash);
+  if (!challenge || challenge.purpose !== 'username' || !challenge.verified || challenge.expires <= Date.now()) return res.status(403).json({ error: 'Подтвердите смену логина кодом из письма.' });
+  const { currentPassword, newUsername } = req.body || {};
+  if (typeof currentPassword !== 'string' || currentPassword.length > 256 || typeof newUsername !== 'string' || !/^[A-Za-z0-9._-]{3,64}$/.test(newUsername)) return res.status(400).json({ error: 'Логин должен содержать 3–64 латинские буквы, цифры или символы . _ -' });
+  if (challenge.checking) return res.status(429).json({ error: 'Дождитесь завершения проверки.' });
+  if (activePasswordChecks >= 4) return res.status(503).json({ error: 'Сервер занят. Повторите попытку позже.' });
+  challenge.checking = true;
+  challenge.passwordAttempts = (challenge.passwordAttempts || 0) + 1;
+  activePasswordChecks++;
+  try {
+    const account = db.prepare('SELECT username, password_hash, password_salt FROM admin_account WHERE id=1').get();
+    const validPassword = await verifyPassword(currentPassword, account);
+    if (passwordChallenges.get(challenge.session) !== challenge || challenge.expires <= Date.now() || !sessionFor(req)) return res.status(403).json({ error: 'Подтверждение истекло. Запросите новый код.' });
+    if (!validPassword) {
+      if (challenge.passwordAttempts >= 5) passwordChallenges.delete(challenge.session);
+      return res.status(401).json({ error: 'Неверный текущий пароль.' });
+    }
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const result = db.prepare('UPDATE admin_account SET username=? WHERE id=1 AND username=? AND password_hash=? AND password_salt=?').run(newUsername, account.username, account.password_hash, account.password_salt);
+      if (!result.changes) throw new Error('Account changed concurrently.');
+      db.prepare('DELETE FROM admin_sessions').run();
+      db.exec('COMMIT');
+    } catch (error) { db.exec('ROLLBACK'); throw error; }
+    passwordChallenges.clear();
+    res.setHeader('Set-Cookie', sessionCookie('', 0));
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: 'Не удалось изменить логин.' }); }
+  finally { challenge.checking = false; activePasswordChecks--; }
+});
 app.get('/api/auth/me', requireAdmin, (req, res) => res.json({ username: req.adminSession.account.username }));
 app.post('/api/auth/logout', (req, res) => {
   if (!isAllowedOrigin(req.headers.origin)) return res.sendStatus(403);
@@ -462,6 +554,14 @@ app.get('/api/admin/overview', requireAdmin, (_req, res) => {
 });
 const contentTypes = new Set(['products','categories','tags','specifications','services','reviews','works','contacts']);
 function validPayload(type,payload){
+  if(type==='specifications' && (!['text','number','range'].includes(payload.valueType || 'text') || !['values','range'].includes(payload.filterMode || 'values') || (payload.unit !== undefined && typeof payload.unit !== 'string'))) return false;
+  if(type==='products') {
+    for(const characteristics of [payload.characteristics, ...(Array.isArray(payload.variants) ? payload.variants.map((variant) => variant?.characteristics) : [])]) {
+      if(characteristics == null) continue;
+      if(typeof characteristics !== 'object' || Array.isArray(characteristics)) return false;
+      for(const value of Object.values(characteristics)) if(value && typeof value === 'object' && (Array.isArray(value) || !Number.isFinite(value.min) || !Number.isFinite(value.max) || value.min > value.max)) return false;
+    }
+  }
   if(type==='contacts'){
     for(const [key,max] of [['legalName',300],['inn',10],['ogrn',13],['legalAddress',500]]){
       if(payload[key]!==undefined && (typeof payload[key]!=='string' || payload[key].length>max))return false;
@@ -473,6 +573,15 @@ function validPayload(type,payload){
   if(type==='reviews'&&(!payload.authorName||!payload.text))return false;
   if(type==='categories'&&payload.parentId!=null&&!Number.isInteger(payload.parentId))return false;
   return true;
+}
+function specificationInUse(title) {
+  return db.prepare("SELECT payload_json FROM admin_content WHERE type='products'").all().some((row) => {
+    const product = JSON.parse(row.payload_json);
+    return [product.characteristics, ...(Array.isArray(product.variants) ? product.variants.map((variant) => variant?.characteristics) : [])].some((values) => values && Object.hasOwn(values, title));
+  });
+}
+function duplicateSpecification(title, id = 0) {
+  return db.prepare("SELECT id,title FROM admin_content WHERE type='specifications' AND id<>?").all(id).some((row) => row.title.toLocaleLowerCase('ru') === title.trim().toLocaleLowerCase('ru'));
 }
 function categoryParentWouldCycle(categoryId, parentId) {
   if (parentId == null) return false;
@@ -584,6 +693,7 @@ app.post('/api/admin/content/:type', originGuard, requireAdmin, (req,res) => {
   const {type}=req.params,{slug,title,payload={},published=false,sortOrder=0}=req.body||{};
   if(!contentTypes.has(type))return res.sendStatus(404);
   if(typeof slug!=='string'||!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)||typeof title!=='string'||!title.trim()||typeof payload!=='object'||Array.isArray(payload)||!validPayload(type,payload))return res.status(400).json({error:type==='products'?'Варианты должны иметь уникальный slug и целую цену в рублях.':'Проверьте название, адрес и данные записи.'});
+  if(type==='specifications' && duplicateSpecification(title)) return res.status(409).json({error:'Характеристика с таким названием уже существует.'});
   if(type==='categories'&&!validCategoryParent(null,payload.parentId))return res.status(400).json({error:'Выберите существующую родительскую категорию.'});
   const now=new Date().toISOString();
   try{const result=db.prepare('INSERT INTO admin_content(type,slug,title,payload_json,published,sort_order,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)').run(type,slug,title.trim(),JSON.stringify(payload),published?1:0,Number(sortOrder)||0,now,now);res.status(201).json({id:Number(result.lastInsertRowid)});}catch(e){res.status(409).json({error:'Такая ссылка уже используется в этом разделе.'});}
@@ -592,10 +702,15 @@ app.put('/api/admin/content/:type/:id', originGuard, requireAdmin, (req,res)=>{
   const {type,id}=req.params,{slug,title,payload={},published=false,sortOrder=0}=req.body||{};
   if(!contentTypes.has(type))return res.sendStatus(404);
   if(typeof slug!=='string'||!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)||typeof title!=='string'||!title.trim()||typeof payload!=='object'||Array.isArray(payload)||!validPayload(type,payload))return res.status(400).json({error:type==='products'?'Варианты должны иметь уникальный slug и целую цену в рублях.':'Проверьте название, адрес и данные записи.'});
+  if(type==='specifications') {
+    if(duplicateSpecification(title,Number(id))) return res.status(409).json({error:'Характеристика с таким названием уже существует.'});
+    const previous=db.prepare("SELECT title,payload_json FROM admin_content WHERE type='specifications' AND id=?").get(Number(id));
+    if(previous && (previous.title!==title.trim() || (JSON.parse(previous.payload_json).valueType || 'text')!==(payload.valueType || 'text')) && specificationInUse(previous.title)) return res.status(409).json({error:'Сначала удалите эту характеристику из товаров, чтобы изменить её название или тип.'});
+  }
   if(type==='categories'&&!validCategoryParent(Number(id),payload.parentId))return res.status(400).json({error:'Выберите существующую категорию и не создавайте вложенность в саму себя или её подразделение.'});
   try{const r=db.prepare('UPDATE admin_content SET slug=?,title=?,payload_json=?,published=?,sort_order=?,updated_at=? WHERE id=? AND type=?').run(slug,title.trim(),JSON.stringify(payload),published?1:0,Number(sortOrder)||0,new Date().toISOString(),Number(id),type);if(!r.changes)return res.sendStatus(404);res.sendStatus(204);}catch(e){res.status(409).json({error:'Такая ссылка уже используется в этом разделе.'});}
 });
-app.delete('/api/admin/content/:type/:id', originGuard, requireAdmin, (req,res)=>{const {type,id}=req.params;if(!contentTypes.has(type))return res.sendStatus(404);if(type==='categories'){const children=db.prepare("SELECT id,payload_json FROM admin_content WHERE type='categories' AND id<>?").all(Number(id));const products=db.prepare("SELECT id,payload_json FROM admin_content WHERE type='products'").all();if(children.some(x=>JSON.parse(x.payload_json).parentId===Number(id))||products.some(x=>(JSON.parse(x.payload_json).categoryIds||[]).includes(Number(id))))return res.status(409).json({error:'Сначала перенесите товары и подкатегории из этого раздела.'});}const r=db.prepare('DELETE FROM admin_content WHERE id=? AND type=?').run(Number(id),type);return r.changes?res.sendStatus(204):res.sendStatus(404);});
+app.delete('/api/admin/content/:type/:id', originGuard, requireAdmin, (req,res)=>{const {type,id}=req.params;if(!contentTypes.has(type))return res.sendStatus(404);if(type==='specifications'){const row=db.prepare("SELECT title FROM admin_content WHERE type='specifications' AND id=?").get(Number(id));if(row && specificationInUse(row.title))return res.status(409).json({error:'Сначала удалите эту характеристику из товаров.'});}if(type==='categories'){const children=db.prepare("SELECT id,payload_json FROM admin_content WHERE type='categories' AND id<>?").all(Number(id));const products=db.prepare("SELECT id,payload_json FROM admin_content WHERE type='products'").all();if(children.some(x=>JSON.parse(x.payload_json).parentId===Number(id))||products.some(x=>(JSON.parse(x.payload_json).categoryIds||[]).includes(Number(id))))return res.status(409).json({error:'Сначала перенесите товары и подкатегории из этого раздела.'});}const r=db.prepare('DELETE FROM admin_content WHERE id=? AND type=?').run(Number(id),type);return r.changes?res.sendStatus(204):res.sendStatus(404);});
 app.post('/api/callback', originGuard, (req, res) => {
   let rate;
   try { rate = reserveCallbackRateSlot(req); } catch { return res.status(503).json({ error: 'Не удалось принять заявку. Попробуйте позже.' }); }

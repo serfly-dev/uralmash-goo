@@ -3,6 +3,8 @@ import { apiOrigin } from '../../lib/api';
 
 export type ProductMedia = string | { url?: string };
 
+export type CharacteristicValue = string | number | boolean | null | { min: number; max: number };
+
 export type ProductVariant = {
   slug: string;
   href?: string;
@@ -10,7 +12,7 @@ export type ProductVariant = {
   priceRub?: number;
   article?: string;
   media?: ProductMedia[];
-  characteristics?: Record<string, string | number | boolean | null>;
+  characteristics?: Record<string, CharacteristicValue>;
 };
 
 export type ProductRecord = {
@@ -21,7 +23,7 @@ export type ProductRecord = {
   featuredOnHome?: boolean;
   priceFromRub?: number | null;
   media?: ProductMedia[];
-  characteristics?: Record<string, string | number | boolean | null>;
+  characteristics?: Record<string, CharacteristicValue>;
   categories?: number[];
   variants?: ProductVariant[];
 };

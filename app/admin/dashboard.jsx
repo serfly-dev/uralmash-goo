@@ -6,6 +6,7 @@ import { adminApi, apiOrigin, authApi } from '../lib/api';
 const modules = [
   ['products', 'Каталог'],
   ['categories', 'Категории'],
+  ['specifications', 'Характеристики'],
   ['tags', 'Теги'],
   ['services', 'Направления'],
   ['reviews', 'Отзывы'],
@@ -30,7 +31,7 @@ function parseWorkStages(content = '') {
 
 function emptyPayload(section) {
   if (section === 'products') return { description: '', media: [], characteristics: {}, variants: [], categoryIds: [], tagIds: [] };
-  if (section === 'categories') return { parentId: null, filterSpecificationIds: [] };
+  if (section === 'categories') return { parentId: null };
   if (section === 'specifications') return { valueType: 'text', unit: '', filterMode: 'values' };
   if (section === 'reviews') return { authorName: '', text: '' };
   if (section === 'services') return { description: '', content: '', media: [] };
@@ -151,12 +152,8 @@ function MediaSelector({ label, help, mediaFiles, value, onChange, onUpload, onD
   );
 }
 
-function StructuredFields({ section, edit, setEdit, categories, tags, specifications, mediaFiles, onUpload, onDeleteMedia, onOpenCategory, onAddFilter }) {
+function StructuredFields({ section, edit, setEdit, categories, tags, specifications, mediaFiles, onUpload, onDeleteMedia, onOpenCategory }) {
   const payload = edit.payload;
-  const [filterTitle, setFilterTitle] = useState('');
-  const [filterType, setFilterType] = useState('text');
-  const [filterUnit, setFilterUnit] = useState('');
-  const [filterMode, setFilterMode] = useState('values');
   const set = (key, value) => setEdit({ ...edit, payload: { ...payload, [key]: value } });
   const text = (key, label, options = {}) => (
     <FormField key={key} label={label} help={options.help}>
@@ -199,21 +196,27 @@ function StructuredFields({ section, edit, setEdit, categories, tags, specificat
     );
   };
 
-  const characteristicFields = (value, onChange) => {
-    const categoryIds = payload.categoryIds || [];
-    const ids = new Set(categories.filter((category) => categoryIds.includes(category.id)).flatMap((category) => category.payload?.filterSpecificationIds || []));
-    const filters = specifications.filter((specification) => ids.has(specification.id));
-    return <fieldset className="editor-fieldset"><legend>Значения для фильтров</legend>
-      {filters.length ? filters.map((filter) => <FormField key={filter.id} label={filter.title + (filter.payload?.unit ? ', ' + filter.payload.unit : '')}>
-        <input type={filter.payload?.valueType === 'number' ? 'number' : 'text'} step={filter.payload?.valueType === 'number' ? 'any' : undefined} value={value?.[filter.title] ?? ''} onChange={(event) => {
+  const characteristicFields = (value, onChange) => <fieldset className="editor-fieldset"><legend>Характеристики</legend>
+    <p className="field-help">Выберите нужные характеристики и заполните значения.</p>
+    {specifications.length ? specifications.map((specification) => {
+      const title = specification.title;
+      const type = specification.payload?.valueType || 'text';
+      const selected = Object.hasOwn(value, title);
+      const current = value[title];
+      const label = title + (specification.payload?.unit ? ', ' + specification.payload.unit : '');
+      return <div key={specification.id}>
+        <label className="check-line check-line--compact"><input type="checkbox" checked={selected} onChange={(event) => {
           const next = { ...value };
-          if (event.target.value === '') delete next[filter.title];
-          else next[filter.title] = filter.payload?.valueType === 'number' ? Number(event.target.value) : event.target.value;
+          if (event.target.checked) next[title] = type === 'range' ? { min: '', max: '' } : '';
+          else delete next[title];
           onChange(next);
-        }} />
-      </FormField>) : <small>Выберите категорию и настройте в ней фильтры.</small>}
-    </fieldset>;
-  };
+        }} /><span>{label}</span></label>
+        {selected && (type === 'range' && current && typeof current === 'object' ? <div className="editor-grid">
+          {['min', 'max'].map((bound) => <FormField key={bound} label={label + (bound === 'min' ? ' — от' : ' — до')}><input type="number" step="any" required value={current[bound] ?? ''} onChange={(event) => onChange({ ...value, [title]: { ...current, [bound]: event.target.value === '' ? '' : Number(event.target.value) } })} /></FormField>)}
+        </div> : <FormField label={label}><input required type={type === 'number' ? 'number' : 'text'} step={type === 'number' ? 'any' : undefined} value={current ?? ''} onChange={(event) => onChange({ ...value, [title]: type === 'number' && event.target.value !== '' ? Number(event.target.value) : event.target.value })} /></FormField>)}
+      </div>;
+    }) : <small>Сначала добавьте характеристики в соответствующем разделе.</small>}
+  </fieldset>;
 
   if (section === 'products') {
     const variants = payload.variants || [];
@@ -310,23 +313,6 @@ function StructuredFields({ section, edit, setEdit, categories, tags, specificat
             <button type="button" onClick={() => onOpenCategory(null, edit.id)}>Добавить подкатегорию</button>
           </>}
         </fieldset>
-        <fieldset className="editor-fieldset">
-          <legend>Фильтры каталога</legend>
-          <small>Выберите фильтры для этой категории или добавьте новый.</small>
-          {specifications.map((specification) => (
-            <label className="check-line check-line--compact" key={specification.id}>
-              <input type="checkbox" checked={(payload.filterSpecificationIds || []).includes(specification.id)} onChange={(event) => set('filterSpecificationIds', event.target.checked ? [...(payload.filterSpecificationIds || []), specification.id] : (payload.filterSpecificationIds || []).filter((id) => id !== specification.id))} />
-              <span>{specification.title}{specification.payload?.unit ? ', ' + specification.payload.unit : ''}</span>
-            </label>
-          ))}
-          <div className="inline-filter">
-            <input aria-label="Название фильтра" placeholder="Название фильтра" value={filterTitle} onChange={(event) => setFilterTitle(event.target.value)} />
-            <select aria-label="Тип фильтра" value={filterType} onChange={(event) => { setFilterType(event.target.value); setFilterMode('values'); }}><option value="text">Текст</option><option value="number">Число</option></select>
-            <input aria-label="Единица измерения" placeholder="Ед. измерения" value={filterUnit} onChange={(event) => setFilterUnit(event.target.value)} />
-            {filterType === 'number' && <select aria-label="Способ фильтрации" value={filterMode} onChange={(event) => setFilterMode(event.target.value)}><option value="values">Выбор значений</option><option value="range">Диапазон</option></select>}
-            <button type="button" onClick={async () => { if (await onAddFilter(filterTitle, filterType, filterUnit, filterMode)) { setFilterTitle(''); setFilterUnit(''); } }}>Добавить фильтр</button>
-          </div>
-        </fieldset>
       </>
     );
   }
@@ -335,18 +321,19 @@ function StructuredFields({ section, edit, setEdit, categories, tags, specificat
     return (
       <>
         <FormField label="Тип значения" help="Выберите число для характеристик с единицей измерения, например мощности.">
-          <select value={payload.valueType || 'text'} onChange={(event) => set('valueType', event.target.value)}>
+          <select value={payload.valueType || 'text'} onChange={(event) => setEdit({ ...edit, payload: { ...payload, valueType: event.target.value, filterMode: event.target.value === 'range' ? 'range' : 'values' } })}>
             <option value="text">Текст</option>
             <option value="number">Число</option>
+            <option value="range">Диапазон чисел</option>
           </select>
         </FormField>
         {text('unit', 'Единица измерения', { placeholder: 'Например, кВт', help: 'Оставьте пустым для текстовых характеристик.' })}
-        <FormField label="Способ фильтрации" help="Задайте диапазон для чисел или выбор готовых значений.">
+        {payload.valueType === 'number' && <FormField label="Способ фильтрации" help="Задайте диапазон для чисел или выбор готовых значений.">
           <select value={payload.filterMode || 'values'} onChange={(event) => set('filterMode', event.target.value)}>
             <option value="values">Готовые значения</option>
             <option value="range">Диапазон «от — до»</option>
           </select>
-        </FormField>
+        </FormField>}
       </>
     );
   }
@@ -451,7 +438,8 @@ function StructuredFields({ section, edit, setEdit, categories, tags, specificat
   return null;
 }
 
-function PasswordSettings() {
+function PasswordSettings({ mode = 'password' }) {
+  const changingUsername = mode === 'username';
   const [step, setStep] = useState('request');
   const [code, setCode] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
@@ -463,12 +451,12 @@ function PasswordSettings() {
   async function submit(event) {
     event.preventDefault();
     setError('');
-    if (step === 'password' && newPassword !== confirmation) return setError('Новые пароли не совпадают.');
+    if (!changingUsername && step === 'password' && newPassword !== confirmation) return setError('Новые пароли не совпадают.');
     setBusy(true);
     try {
       const action = step === 'request' ? 'code' : step === 'code' ? 'verify' : 'change';
-      const body = step === 'code' ? { code } : step === 'password' ? { currentPassword, newPassword } : {};
-      const response = await fetch(`${authApi}/password/${action}`, {
+      const body = step === 'code' ? { code } : step === 'password' ? (changingUsername ? { currentPassword, newUsername: newPassword } : { currentPassword, newPassword }) : { purpose: mode };
+      const response = await fetch(`${authApi}/${step === 'password' && changingUsername ? 'username' : 'password'}/${action}`, {
         method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
       const data = await response.json();
@@ -480,14 +468,15 @@ function PasswordSettings() {
     finally { setBusy(false); }
   }
 
-  if (step === 'done') return <div className="editor-card"><h2>Пароль изменён</h2><p>Для безопасности выполнен выход из всех сеансов.</p><a href="/admin/login">Войти с новым паролем</a></div>;
+  if (step === 'done') return <div className="editor-card"><h2>{changingUsername ? 'Логин изменён' : 'Пароль изменён'}</h2><p>Для безопасности выполнен выход из всех сеансов.</p><a href="/admin/login">{changingUsername ? 'Войти с новым логином' : 'Войти с новым паролем'}</a></div>;
   return <form className="editor-card" onSubmit={submit}>
-    <h2>Смена пароля</h2>
+    <h2>{changingUsername ? 'Смена логина' : 'Смена пароля'}</h2>
     {step === 'request' && <p>Отправим код подтверждения на почту, настроенную для уведомлений сайта.</p>}
     {step === 'code' && <><p>Введите шестизначный код из письма. Он действует 10 минут.</p><FormField label="Код из письма"><input required inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={code} onChange={(event) => setCode(event.target.value)} /></FormField></>}
-    {step === 'password' && <><FormField label="Текущий пароль"><input required type="password" autoComplete="current-password" maxLength={256} value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></FormField><FormField label="Новый пароль" help="От 12 до 256 символов."><input required type="password" autoComplete="new-password" minLength={12} maxLength={256} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></FormField><FormField label="Повторите новый пароль"><input required type="password" autoComplete="new-password" minLength={12} maxLength={256} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></FormField></>}
+    {step === 'password' && <><FormField label="Текущий пароль"><input required type="password" autoComplete="current-password" maxLength={256} value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></FormField>{changingUsername ? <FormField label="Новый логин" help="От 3 до 64 символов: латинские буквы, цифры и знаки . _ -"><input required autoComplete="username" minLength={3} maxLength={64} pattern="[A-Za-z0-9._\-]{3,64}" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></FormField> : <><FormField label="Новый пароль" help="От 12 до 256 символов: латинские буквы, цифры и знаки !@#$%^&*()_+-=[]{};:,.?"><input required type="password" autoComplete="new-password" minLength={12} maxLength={256} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></FormField><FormField label="Повторите новый пароль"><input required type="password" autoComplete="new-password" minLength={12} maxLength={256} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></FormField></>}</>}
+
     {error && <p className="form-error" role="alert">{error}</p>}
-    <div className="editor-actions"><button className="admin-primary" disabled={busy}>{busy ? 'Подождите…' : step === 'request' ? 'Отправить код' : step === 'code' ? 'Подтвердить код' : 'Изменить пароль'}</button>{step !== 'request' && <button type="button" disabled={busy} onClick={() => { setStep('request'); setCode(''); setCurrentPassword(''); setNewPassword(''); setConfirmation(''); setError(''); }}>Начать заново</button>}</div>
+    <div className="editor-actions"><button className="admin-primary" disabled={busy}>{busy ? 'Подождите…' : step === 'request' ? 'Отправить код' : step === 'code' ? 'Подтвердить код' : changingUsername ? 'Изменить логин' : 'Изменить пароль'}</button>{step !== 'request' && <button type="button" disabled={busy} onClick={() => { setStep('request'); setCode(''); setCurrentPassword(''); setNewPassword(''); setConfirmation(''); setError(''); }}>Начать заново</button>}</div>
   </form>;
 }
 
@@ -583,7 +572,7 @@ export default function AdminDashboard({ username }) {
 
   useEffect(() => {
     setEdit(null);
-    if (section === 'overview' || section === 'password' || section === 'privacy-policy') {
+    if (section === 'overview' || section === 'password' || section === 'username' || section === 'privacy-policy') {
       setRows([]);
       setReqs([]);
       setError('');
@@ -629,24 +618,7 @@ export default function AdminDashboard({ username }) {
     if (section === 'works' && !Array.isArray(payload.stages)) payload.stages = parseWorkStages(payload.content);
     setEdit(row
       ? { id: row.id, title: row.title, slug: row.slug, payload, published: row.published, sortOrder: row.sort_order }
-      : { title: '', slug: '', payload, published: false, sortOrder: 0 });
-  }
-
-  async function addFilter(title, valueType, unit, filterMode) {
-    title = title.trim();
-    if (!title || !slugify(title)) { setError('Укажите название фильтра.'); return false; }
-    setError('');
-    try {
-      const response = await fetch(api + '/content/specifications', {
-        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, slug: slugify(title), payload: { valueType, unit: unit.trim(), filterMode }, published: true }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Не удалось добавить фильтр.');
-      setSpecifications((current) => [...current, { id: data.id, title, payload: { valueType, unit: unit.trim(), filterMode } }]);
-      setEdit((current) => ({ ...current, payload: { ...current.payload, filterSpecificationIds: [...(current.payload.filterSpecificationIds || []), data.id] } }));
-      return true;
-    } catch (err) { setError(err.message); return false; }
+      : { title: '', slug: '', payload, published: section === 'specifications', sortOrder: 0 });
   }
 
   async function save(event) {
@@ -660,6 +632,13 @@ export default function AdminDashboard({ username }) {
         for (const key of ['legalName', 'inn', 'ogrn', 'legalAddress']) payload[key] = (payload[key] || '').trim();
         if (payload.inn && !/^\d{10}$/.test(payload.inn)) throw new Error('ИНН организации должен содержать 10 цифр.');
         if (payload.ogrn && !/^\d{13}$/.test(payload.ogrn)) throw new Error('ОГРН организации должен содержать 13 цифр.');
+      }
+      if (section === 'products') {
+        for (const values of [payload.characteristics, ...(payload.variants || []).map((variant) => variant.characteristics)]) {
+          for (const value of Object.values(values || {})) {
+            if (value && typeof value === 'object' && (!Number.isFinite(value.min) || !Number.isFinite(value.max) || value.min > value.max)) throw new Error('Укажите корректные границы диапазона.');
+          }
+        }
       }
       if (section === 'products') payload.variants = (payload.variants || []).map((variant) => ({ ...variant, priceRub: Number(variant.priceRub) }));
       const body = { slug: edit.slug, title: edit.title, payload, published: edit.published, sortOrder: edit.sortOrder };
@@ -740,7 +719,7 @@ export default function AdminDashboard({ username }) {
     }
   }
 
-  const current = section === 'password' ? 'Смена пароля' : modules.find(([id]) => id === section)?.[1] || 'Обзор';
+  const current = section === 'username' ? 'Смена логина' : section === 'password' ? 'Смена пароля' : modules.find(([id]) => id === section)?.[1] || 'Обзор';
   const isCreating = edit && !edit.id;
 
   return (
@@ -754,6 +733,7 @@ export default function AdminDashboard({ username }) {
         <nav className="admin-nav" aria-label="Разделы админ-панели">
           <button className={'nav-item' + (section === 'overview' ? ' active' : '')} onClick={() => setSection('overview')}>Обзор</button>
           {modules.map(([id, label]) => <button key={id} className={'nav-item' + (section === id ? ' active' : '')} onClick={() => setSection(id)}>{label}</button>)}
+          <button className={'nav-item' + (section === 'username' ? ' active' : '')} onClick={() => setSection('username')}>Смена логина</button>
           <button className={'nav-item' + (section === 'password' ? ' active' : '')} onClick={() => setSection('password')}>Смена пароля</button>
         </nav>
         <div className="sidebar-bottom"><span className="status-light" />Доступ: {username}</div>
@@ -770,7 +750,7 @@ export default function AdminDashboard({ username }) {
             <div>
               <p className="admin-eyebrow">Управление сайтом</p>
               <h1>{current}</h1>
-              <p>{section === 'password' ? 'Подтверждение по почте и смена пароля администратора.' : section === 'overview' ? 'Разделы для управления сайтом.' : section === 'requests' ? 'В заявках указаны тема обращения и страница, с которой его отправили.' : section === 'contacts' ? 'Контактные данные на сайте.' : 'Записи раздела «' + current + '».'}</p>
+              <p>{section === 'username' ? 'Подтверждение по почте и смена логина администратора.' : section === 'password' ? 'Подтверждение по почте и смена пароля администратора.' : section === 'overview' ? 'Разделы для управления сайтом.' : section === 'requests' ? 'В заявках указаны тема обращения и страница, с которой его отправили.' : section === 'contacts' ? 'Контактные данные на сайте.' : 'Записи раздела «' + current + '».'}</p>
             </div>
             {editable.includes(section) && section !== 'contacts' && <button className="admin-primary add-button" onClick={() => open(null)}>Добавить запись</button>}
           </div>
@@ -778,7 +758,7 @@ export default function AdminDashboard({ username }) {
           {error && <div className="form-error admin-message" role="alert">{error}</div>}
           {notice && <div className="admin-notice" role="status">{notice}<button onClick={() => setNotice('')} aria-label="Закрыть уведомление">×</button></div>}
 
-          {section === 'password' && <PasswordSettings />}
+          {(section === 'password' || section === 'username') && <PasswordSettings key={section} mode={section} />}
           {section === 'privacy-policy' && <PrivacyPolicySettings />}
 
           {section === 'overview' && (
@@ -829,7 +809,6 @@ export default function AdminDashboard({ username }) {
                   onUpload={uploadMedia}
                   onDeleteMedia={deleteMedia}
                   onOpenCategory={(row, parentId) => { if (confirm('При переходе несохранённые изменения категории будут потеряны. Продолжить?')) open(row, parentId); }}
-                  onAddFilter={addFilter}
                 />
               </section>
 

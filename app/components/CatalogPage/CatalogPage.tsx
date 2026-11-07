@@ -8,7 +8,7 @@ import { publicApi } from '../../lib/api';
 export type FilterSpecification = {
   id: number;
   title: string;
-  payload?: { valueType?: 'text' | 'number'; unit?: string; filterMode?: 'values' | 'range' };
+  payload?: { valueType?: 'text' | 'number' | 'range'; unit?: string; filterMode?: 'values' | 'range' };
 };
 export type CategoryRecord = ProductCategory & { payload?: { parentId?: number | null; filterSpecificationIds?: number[] } };
 export type CatalogInitialData = { products: ProductRecord[]; categories: CategoryRecord[]; specifications: FilterSpecification[] };
@@ -109,20 +109,17 @@ export default function CatalogPage({ initialData, initialError = false }: { ini
     return new Set(selectedCategories.flatMap((id) => [...descendantsOf(id, categories)]));
   }, [categories, selectedCategories]);
 
+  const categoryProducts = useMemo(() => (products || []).filter((product) => !selectedCategories.length ||
+    (product.categories || []).some((id) => scopedCategoryIds.has(id))), [products, scopedCategoryIds, selectedCategories]);
+
   const activeSpecifications = useMemo(() => {
-    const configuredIds = new Set(categories
-      .filter((category) => scopedCategoryIds.has(category.id))
-      .flatMap((category) => category.payload?.filterSpecificationIds || []));
     const seenTitles = new Set<string>();
     return specifications.filter((specification) => {
-      if (!configuredIds.has(specification.id) || seenTitles.has(specification.title)) return false;
+      if (seenTitles.has(specification.title) || !categoryProducts.some((product) => valuesOf(product, specification.title).length)) return false;
       seenTitles.add(specification.title);
       return true;
     });
-  }, [categories, scopedCategoryIds, specifications]);
-
-  const categoryProducts = useMemo(() => (products || []).filter((product) => !selectedCategories.length ||
-    (product.categories || []).some((id) => scopedCategoryIds.has(id))), [products, scopedCategoryIds, selectedCategories]);
+  }, [specifications, categoryProducts]);
 
   useEffect(() => {
     const availableValues = new Map(activeSpecifications.map((specification) => [
@@ -155,9 +152,13 @@ export default function CatalogPage({ initialData, initialError = false }: { ini
       const value = variant.characteristics?.[specification.title];
       if (value === null || value === undefined || value === '') return !selected.length && !range.min && !range.max;
       if (selected.length && !selected.includes(String(value))) return false;
-      if ((range.min || range.max) && typeof value !== 'number') return false;
-      if (range.min && Number(value) < Number(range.min)) return false;
-      if (range.max && Number(value) > Number(range.max)) return false;
+      if (range.min || range.max) {
+        const min = typeof value === 'number' ? value : typeof value === 'object' ? value.min : null;
+        const max = typeof value === 'number' ? value : typeof value === 'object' ? value.max : null;
+        if (min === null || max === null || !Number.isFinite(min) || !Number.isFinite(max)) return false;
+        if (range.min && max < Number(range.min)) return false;
+        if (range.max && min > Number(range.max)) return false;
+      }
       return true;
     }));
     if (!matchesVariant) return false;
@@ -268,7 +269,7 @@ export default function CatalogPage({ initialData, initialError = false }: { ini
                 const label = `${specification.title}${specification.payload?.unit ? `, ${specification.payload.unit}` : ''}`;
                 return <details className={CatalogPageStyles["catalog-page__filter-group"]} key={specification.id}>
                   <summary>{label}<span>{selectedCount || ''}</span></summary>
-                  {specification.payload?.valueType === 'number' && specification.payload?.filterMode === 'range' ? (
+                  {(specification.payload?.valueType === 'range' || (specification.payload?.valueType === 'number' && specification.payload?.filterMode === 'range')) ? (
                     <div className={CatalogPageStyles["catalog-page__range"]}>
                       <label><span>От</span><input aria-label={`${label}: от`} type="number" value={ranges[specification.title]?.min || ''} onChange={(event) => setRanges((current) => ({ ...current, [specification.title]: { ...current[specification.title], min: event.target.value, max: current[specification.title]?.max || '' } }))} /></label>
                       <label><span>До</span><input aria-label={`${label}: до`} type="number" value={ranges[specification.title]?.max || ''} onChange={(event) => setRanges((current) => ({ ...current, [specification.title]: { ...current[specification.title], min: current[specification.title]?.min || '', max: event.target.value } }))} /></label>

@@ -22,7 +22,7 @@
 
 .hero-nav {
   position: absolute;
-  z-index: 1;
+  z-index: 2;
   top: clamp(25px, 5.2vh, 56px);
   left: clamp(24px, 4.4vw, 74px);
   right: 22px;
@@ -963,6 +963,10 @@
 .home-repair__action:hover {
   border-color: #fff;
   background: #fff;
+}
+
+.home-repair__link {
+  margin-left: 12px;
 }
 
 .home-repair__action:focus-visible {
