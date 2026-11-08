@@ -35,7 +35,7 @@
   font: 400 17px/1.6 Manrope, Arial, sans-serif;
 }
 
-.home-final-cta__action {
+.home-final-cta__copy .home-final-cta__action {
   display: inline-flex;
   min-height: 54px;
   margin-top: 28px;
@@ -50,7 +50,7 @@
   transition: background-color 160ms ease, border-color 160ms ease;
 }
 
-.home-final-cta__action:hover {
+.home-final-cta__copy .home-final-cta__action:hover {
   border-color: #fff;
   background: #fff;
 }

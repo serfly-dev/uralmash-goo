@@ -57,8 +57,11 @@ export default function ReviewsShowcase({ initialReviews }: { initialReviews?: R
               {visibleReviews.map((review) => (
                 <li className={ReviewsShowcaseStyles["home-reviews__item"]} key={review.id}>
                   <figure>
+                    <figcaption>
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>
+                      {review.payload?.authorName}
+                    </figcaption>
                     <blockquote><p>{review.payload?.text}</p></blockquote>
-                    <figcaption>{review.payload?.authorName}</figcaption>
                   </figure>
                 </li>
               ))}

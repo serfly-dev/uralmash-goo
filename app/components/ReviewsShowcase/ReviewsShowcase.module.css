@@ -80,11 +80,21 @@
 }
 
 .home-reviews__item figcaption {
-  margin-top: auto;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 12px;
   color: var(--muted);
   font: 600 14px/1.4 Manrope, Arial, sans-serif;
+}
+
+.home-reviews__item figcaption svg {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  padding: 6px;
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--blue);
 }
 
 .home-reviews__empty {

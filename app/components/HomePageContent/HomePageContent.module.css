@@ -180,6 +180,14 @@
   white-space: nowrap;
 }
 
+.hero-machine__notice {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .hero-proof {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1031,6 +1039,10 @@
 }
 
 @media (max-width: 1024px) {
+
+  .home-repair__link {
+    margin-left: 0;
+  }
 
   .home-repair__action {
     width: 100%;

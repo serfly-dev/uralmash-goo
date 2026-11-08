@@ -238,7 +238,10 @@ export default function HomePageContent({ featuredProducts, categories, reviews,
               <img className={HomePageContentStyles["hero-machine__image"]} key={currentEquipment.src} src={currentEquipment.src} alt={currentEquipment.alt} width="1536" height="1024" fetchPriority={activeSlide === 0 ? 'high' : undefined} decoding="async" />
             </div>
             <div className={HomePageContentStyles["hero-machine__carousel"]}>
-              <span className={HomePageContentStyles["hero-machine__title"]}>{currentEquipment.title}</span>
+              <div>
+                <span className={HomePageContentStyles["hero-machine__title"]}>{currentEquipment.title}</span>
+                <span className={HomePageContentStyles["hero-machine__notice"]}>Изображение носит иллюстративный характер</span>
+              </div>
               <div className={HomePageContentStyles["hero-machine__controls"]} aria-label="Управление изображениями оборудования">
                 <button type="button" aria-label="Предыдущее изображение" onClick={() => setActiveSlide((activeSlide + equipmentSlides.length - 1) % equipmentSlides.length)}>‹</button>
                 <button type="button" aria-label="Следующее изображение" onClick={() => setActiveSlide((activeSlide + 1) % equipmentSlides.length)}>›</button>
@@ -250,7 +253,7 @@ export default function HomePageContent({ featuredProducts, categories, reviews,
                 <span>лет опыта</span>
               </div>
               <div className={HomePageContentStyles["hero-proof__item"]}>
-                <strong>18 мес</strong>
+                <strong>13 мес</strong>
                 <span>гарантия</span>
               </div>
             </div>
