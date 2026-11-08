@@ -71,7 +71,20 @@ function FormField({ label, help, children, className = '' }) {
   );
 }
 
-function MediaSelector({ label, help, mediaFiles, value, onChange, onUpload, onDeleteMedia, singleImage = false }) {
+function ExpandableList({ items, renderItem, className = '', compact = true }) {
+  const visibleItems = compact ? items.slice(0, 5) : items;
+  return (
+    <div className={'expandable-list ' + className}>
+      {visibleItems.map(renderItem)}
+      {compact && items.length > 5 && <details className="expandable-list__more">
+        <summary><span>Показать все ({items.length - 5})</span><span className="expandable-list__collapse">Свернуть</span></summary>
+        <div className="expandable-list__items">{items.slice(5).map(renderItem)}</div>
+      </details>}
+    </div>
+  );
+}
+
+function MediaSelector({ label, help, mediaFiles, value, onChange, onUpload, onDeleteMedia, singleImage = false, compactLists = false }) {
   const [uploading, setUploading] = useState(false);
   const selected = Array.isArray(value) ? value.map((item) => typeof item === 'string' ? item : item?.url).filter(Boolean) : [];
   const unlisted = selected.filter((url) => !mediaFiles.some((file) => file.url === url));
@@ -94,6 +107,50 @@ function MediaSelector({ label, help, mediaFiles, value, onChange, onUpload, onD
     }
   }
 
+  function renderMediaOption(item) {
+    if (item.file) {
+      const file = item.file;
+      const isVideo = file.type.startsWith('video/');
+      const checked = selected.includes(file.url);
+      return (
+        <div className={'media-option' + (checked ? ' is-selected' : '')} key={file.id}>
+          <input
+            id={`media-option-${file.id}`}
+            className="media-option__check"
+            type="checkbox"
+            checked={checked}
+            onChange={(event) => onChange(singleImage
+              ? (event.target.checked ? [file.url] : [])
+              : (event.target.checked ? [...selected, file.url] : selected.filter((url) => url !== file.url)))}
+          />
+          <label className="media-option__label" htmlFor={`media-option-${file.id}`}>
+            <span className="media-option__preview">
+              {isVideo ? <span className="media-option__video">▶ Видео</span> : <img src={mediaSource(file.url)} alt="" loading="lazy" />}
+            </span>
+            <span className="media-option__name">{file.name}</span>
+            <small>{formatSize(file.size)}</small>
+          </label>
+          {!checked && <button className="media-option__delete" type="button" onClick={() => onDeleteMedia(file)}>Удалить файл</button>}
+        </div>
+      );
+    }
+
+    const { url } = item;
+    return (
+      <label className="media-option media-option--unlisted is-selected" key={url}>
+        <input
+          className="media-option__check"
+          type="checkbox"
+          checked
+          onChange={() => onChange(singleImage ? [] : selected.filter((item) => item !== url))}
+        />
+        <span className="media-option__preview"><span className="media-option__video">Добавлено ранее</span></span>
+        <span className="media-option__name">{url}</span>
+        <small>Ссылка вне медиатеки</small>
+      </label>
+    );
+  }
+
   return (
     <fieldset className="editor-fieldset media-picker">
       <legend>{label}</legend>
@@ -106,46 +163,12 @@ function MediaSelector({ label, help, mediaFiles, value, onChange, onUpload, onD
         <small>{singleImage ? 'JPG, PNG или WebP · до 25 МБ; фото автоматически приводится к WebP' : 'JPG, PNG, WebP до 25 МБ; MP4 и WebM до 100 МБ'}</small>
       </div>
       {availableFiles.length || unlisted.length ? (
-        <div className="media-grid">
-          {availableFiles.map((file) => {
-            const isVideo = file.type.startsWith('video/');
-            const checked = selected.includes(file.url);
-            return (
-              <div className={'media-option' + (checked ? ' is-selected' : '')} key={file.id}>
-                <input
-                  id={`media-option-${file.id}`}
-                  className="media-option__check"
-                  type="checkbox"
-                  checked={checked}
-                  onChange={(event) => onChange(singleImage
-                    ? (event.target.checked ? [file.url] : [])
-                    : (event.target.checked ? [...selected, file.url] : selected.filter((url) => url !== file.url)))}
-                />
-                <label className="media-option__label" htmlFor={`media-option-${file.id}`}>
-                  <span className="media-option__preview">
-                    {isVideo ? <span className="media-option__video">▶ Видео</span> : <img src={mediaSource(file.url)} alt="" loading="lazy" />}
-                  </span>
-                  <span className="media-option__name">{file.name}</span>
-                  <small>{formatSize(file.size)}</small>
-                </label>
-                {!checked && <button className="media-option__delete" type="button" onClick={() => onDeleteMedia(file)}>Удалить файл</button>}
-              </div>
-            );
-          })}
-          {unlisted.map((url) => (
-            <label className="media-option media-option--unlisted is-selected" key={url}>
-              <input
-                className="media-option__check"
-                type="checkbox"
-                checked
-                onChange={() => onChange(singleImage ? [] : selected.filter((item) => item !== url))}
-              />
-              <span className="media-option__preview"><span className="media-option__video">Добавлено ранее</span></span>
-              <span className="media-option__name">{url}</span>
-              <small>Ссылка вне медиатеки</small>
-            </label>
-          ))}
-        </div>
+        <ExpandableList
+          className="media-grid"
+          items={[...availableFiles.map((file) => ({ file })), ...unlisted.map((url) => ({ url }))]}
+          renderItem={renderMediaOption}
+          compact={compactLists}
+        />
       ) : (
         <p className="media-empty">Файлов пока нет. Загрузите нужное фото или видео здесь.</p>
       )}
@@ -199,7 +222,7 @@ function StructuredFields({ section, edit, setEdit, categories, tags, specificat
 
   const characteristicFields = (value, onChange) => <fieldset className="editor-fieldset"><legend>Характеристики</legend>
     <p className="field-help">Выберите нужные характеристики и заполните значения.</p>
-    {specifications.length ? specifications.map((specification) => {
+    {specifications.length ? <ExpandableList items={specifications} renderItem={(specification) => {
       const title = specification.title;
       const type = specification.payload?.valueType || 'text';
       const selected = Object.hasOwn(value, title);
@@ -221,7 +244,7 @@ function StructuredFields({ section, edit, setEdit, categories, tags, specificat
           {['min', 'max'].map((bound) => <FormField key={bound} label={label + (bound === 'min' ? ' — от' : ' — до')}><input type="number" step="any" required value={current[bound] ?? ''} onChange={(event) => onChange({ ...value, [title]: { ...current, [bound]: event.target.value } })} /></FormField>)}
         </div> : <FormField label={label}><input required type={type === 'number' ? 'number' : 'text'} step={type === 'number' ? 'any' : undefined} value={current ?? ''} onChange={(event) => onChange({ ...value, [title]: event.target.value })} /></FormField>)}
       </div>;
-    }) : <small>Сначала добавьте характеристики в соответствующем разделе.</small>}
+    }} /> : <small>Сначала добавьте характеристики в соответствующем разделе.</small>}
   </fieldset>;
 
   if (section === 'products') {
@@ -240,22 +263,22 @@ function StructuredFields({ section, edit, setEdit, categories, tags, specificat
         <fieldset className="editor-fieldset">
           <legend>Категории</legend>
           <p className="field-help">Выберите все разделы, в которых должен появиться товар.</p>
-          {categories.length ? categories.map((category) => (
+          {categories.length ? <ExpandableList items={categories} renderItem={(category) => (
             <label className="check-line check-line--compact" key={category.id}>
               <input type="checkbox" checked={(payload.categoryIds || []).includes(category.id)} onChange={(event) => set('categoryIds', event.target.checked ? [...(payload.categoryIds || []), category.id] : (payload.categoryIds || []).filter((id) => id !== category.id))} />
               <span>{category.title}</span>
             </label>
-          )) : <small>Сначала добавьте категории.</small>}
+          )} /> : <small>Сначала добавьте категории.</small>}
         </fieldset>
         <fieldset className="editor-fieldset">
           <legend>Теги</legend>
           <p className="field-help">Теги помогают объединять товары по общим признакам.</p>
-          {tags.length ? tags.map((tag) => (
+          {tags.length ? <ExpandableList items={tags} renderItem={(tag) => (
             <label className="check-line check-line--compact" key={tag.id}>
               <input type="checkbox" checked={(payload.tagIds || []).includes(tag.id)} onChange={(event) => set('tagIds', event.target.checked ? [...(payload.tagIds || []), tag.id] : (payload.tagIds || []).filter((id) => id !== tag.id))} />
               <span>{tag.title}</span>
             </label>
-          )) : <small>Сначала добавьте теги.</small>}
+          )} /> : <small>Сначала добавьте теги.</small>}
         </fieldset>
         <MediaSelector
           label="Фото и видео товара"
@@ -265,6 +288,7 @@ function StructuredFields({ section, edit, setEdit, categories, tags, specificat
           onChange={(value) => set('media', value)}
           onUpload={onUpload}
           onDeleteMedia={onDeleteMedia}
+          compactLists
         />
         {characteristicFields(payload.characteristics || {}, (value) => set('characteristics', value))}
         <section className="variant-section">
@@ -273,7 +297,7 @@ function StructuredFields({ section, edit, setEdit, categories, tags, specificat
             <button type="button" onClick={() => set('variants', [...variants, { name: '', slug: '', priceRub: '', article: '', characteristics: {}, media: [] }])}>Добавить вариант</button>
           </div>
           {!variants.length && <p className="empty-state">Если у товара несколько исполнений, добавьте варианты с отдельными ценами.</p>}
-          {variants.map((variant, index) => (
+          <ExpandableList items={variants} renderItem={(variant, index) => (
             <fieldset className="editor-fieldset variant-editor" key={index}>
               <legend>Вариант {index + 1}</legend>
               <button type="button" className="remove-variant" onClick={() => set('variants', variants.filter((_, itemIndex) => itemIndex !== index))}>Удалить</button>
@@ -300,9 +324,10 @@ function StructuredFields({ section, edit, setEdit, categories, tags, specificat
                 onChange={(value) => updateVariant(index, 'media', value)}
                 onUpload={onUpload}
                 onDeleteMedia={onDeleteMedia}
+                compactLists
               />
             </fieldset>
-          ))}
+          )} />
         </section>
       </>
     );
@@ -882,13 +907,13 @@ export default function AdminDashboard({ username }) {
           )}
 
           {editable.includes(section) && section !== 'contacts' && (
-            <div className="table-wrap">
+            <div className={'table-wrap' + (section === 'products' ? ' table-wrap--products' : '')}>
               <table>
                 <thead><tr><th>Название</th><th>Адрес</th><th>Статус</th><th>Действия</th></tr></thead>
                 <tbody>
                   {rows.filter((row) => section !== 'categories' || !row.payload?.parentId).map((row) => (
                     <tr key={row.id}>
-                      <td>{row.title}</td>
+                      <td className={section === 'products' ? 'table-wrap__product-title' : undefined} title={section === 'products' ? row.title : undefined}>{row.title}</td>
                       <td><code>{row.slug}</code></td>
                       <td>{row.published ? 'Опубликовано' : 'Черновик'}</td>
                       <td><button type="button" onClick={() => open(row)}>Изменить</button><button type="button" onClick={() => remove(row)}>Удалить</button></td>
