@@ -7,7 +7,7 @@ import type { ContactRecord } from '../components/SiteFooter/SiteFooter';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata = publicMetadata('Направления · Уралмаш ГОО', 'Проектирование, изготовление и продажа оборудования, дробильно-сортировочных и обогатительных линий.', '/services');
+export const metadata = publicMetadata('Направления | Уралмаш ГОО', 'Проектирование, изготовление и продажа оборудования, дробильно-сортировочных и обогатительных линий.', '/services');
 
 export default async function ServicesRoute() {
   const [services, products, categories, works, contacts] = await Promise.all([

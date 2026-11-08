@@ -6,7 +6,7 @@ import { assertPublicDataAvailable, getServerPublicData } from '../lib/server-pu
 
 export const dynamic = 'force-dynamic';
 
-export const metadata = publicMetadata('Проекты · Уралмаш ГОО', 'Проекты по проектированию и изготовлению дробильно-сортировочного оборудования и обогатительных линий.', '/works');
+export const metadata = publicMetadata('Проекты | Уралмаш ГОО', 'Проекты по проектированию и изготовлению дробильно-сортировочного оборудования и обогатительных линий.', '/works');
 
 export default async function WorksPage() {
   const result = await getServerPublicData<WorkRecord[]>('/works');

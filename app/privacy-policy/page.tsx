@@ -4,7 +4,7 @@ import { getServerPublicData } from '../lib/server-public-data';
 import { publicMetadata } from '../lib/seo';
 import styles from './privacy-policy.module.css';
 
-export const metadata = publicMetadata('Политика обработки персональных данных · Уралмаш ГОО', 'Политика обработки персональных данных ООО «Уралмаш ГОО».', '/privacy-policy');
+export const metadata = publicMetadata('Политика обработки персональных данных | Уралмаш ГОО', 'Политика обработки персональных данных ООО «Уралмаш ГОО».', '/privacy-policy');
 
 export default async function PrivacyPolicyPage() {
   const result = await getServerPublicData<{ text: string }>('/privacy-policy');

@@ -5,7 +5,7 @@ import { assertPublicDataAvailable, getServerPublicData } from '../lib/server-pu
 
 export const dynamic = 'force-dynamic';
 
-export const metadata = publicMetadata('Каталог оборудования · Уралмаш ГОО', 'Каталог дробильно-сортировочного и обогатительного оборудования Уралмаш ГОО.', '/catalog');
+export const metadata = publicMetadata('Каталог оборудования | Уралмаш ГОО', 'Каталог дробильно-сортировочного и обогатительного оборудования Уралмаш ГОО.', '/catalog');
 
 export default async function CatalogRoute() {
   const [products, categories, specifications] = await Promise.all([
