@@ -38,10 +38,3 @@ a {
 }
 
 /* Compact index layout for /services. Detail pages keep their existing layout. */
-
-@media (max-width: 1024px) {
-  html,
-  body {
-    overflow-x: clip;
-  }
-}

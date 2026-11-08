@@ -563,6 +563,8 @@ export default function AdminDashboard({ username }) {
   const [tags, setTags] = useState([]);
   const [specifications, setSpecifications] = useState([]);
   const [mediaFiles, setMediaFiles] = useState([]);
+  const editorRef = useRef(null);
+  const scrollEditorOnOpen = useRef(false);
 
   async function load(contactId = null) {
     setError('');
@@ -639,6 +641,16 @@ export default function AdminDashboard({ username }) {
     if (edit && section !== 'contacts') loadLookups();
   }, [Boolean(edit)]);
 
+  useEffect(() => {
+    if (edit && scrollEditorOnOpen.current) {
+      scrollEditorOnOpen.current = false;
+      editorRef.current?.scrollIntoView({
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
+        block: 'start',
+      });
+    }
+  }, [edit]);
+
   async function logout() {
     await fetch(`${authApi}/logout`, { method: 'POST', credentials: 'include' });
     location.assign('/admin/login');
@@ -647,6 +659,7 @@ export default function AdminDashboard({ username }) {
   function open(row, parentId = null) {
     setError('');
     setNotice('');
+    scrollEditorOnOpen.current = true;
     const payload = row ? { ...(row.payload || {}) } : { ...emptyPayload(section), ...(section === 'categories' ? { parentId } : {}) };
     if (section === 'works' && !Array.isArray(payload.stages)) payload.stages = parseWorkStages(payload.content);
     setEdit(row
@@ -819,7 +832,7 @@ export default function AdminDashboard({ username }) {
           )}
 
           {edit && (
-            <form className="editor-card" onSubmit={save}>
+            <form className="editor-card" onSubmit={save} ref={editorRef}>
               <div className="editor-card__heading">
                 <div><h2>{section === 'contacts' ? 'Контактные данные' : isCreating ? 'Новая запись' : 'Редактирование'}</h2>{section !== 'contacts' && <p>Поля со звёздочкой обязательны.</p>}</div>
                 {section !== 'contacts' && <button type="button" onClick={() => setEdit(null)}>Закрыть</button>}
@@ -907,13 +920,13 @@ export default function AdminDashboard({ username }) {
           )}
 
           {editable.includes(section) && section !== 'contacts' && (
-            <div className={'table-wrap' + (section === 'products' ? ' table-wrap--products' : '')}>
+            <div className="table-wrap table-wrap--content-list">
               <table>
                 <thead><tr><th>Название</th><th>Адрес</th><th>Статус</th><th>Действия</th></tr></thead>
                 <tbody>
                   {rows.filter((row) => section !== 'categories' || !row.payload?.parentId).map((row) => (
                     <tr key={row.id}>
-                      <td className={section === 'products' ? 'table-wrap__product-title' : undefined} title={section === 'products' ? row.title : undefined}>{row.title}</td>
+                      <td className="table-wrap__content-title" title={row.title}>{row.title}</td>
                       <td><code>{row.slug}</code></td>
                       <td>{row.published ? 'Опубликовано' : 'Черновик'}</td>
                       <td><button type="button" onClick={() => open(row)}>Изменить</button><button type="button" onClick={() => remove(row)}>Удалить</button></td>

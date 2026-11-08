@@ -899,6 +899,7 @@
 .home-repair {
   position: relative;
   z-index: 1;
+  overflow: clip;
   padding: clamp(92px, 8vw, 120px) clamp(24px, 3.6vw, 60px);
   background: var(--paper);
   color: #fff;
