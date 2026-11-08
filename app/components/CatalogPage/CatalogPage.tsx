@@ -65,6 +65,7 @@ export default function CatalogPage({ initialData, initialError = false }: { ini
   const [selectedValues, setSelectedValues] = useState<Record<string, string[]>>({});
   const [ranges, setRanges] = useState<Record<string, RangeValue>>({});
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [allFiltersOpen, setAllFiltersOpen] = useState(false);
   const [enteringIds, setEnteringIds] = useState<number[]>([]);
   const previousProductIds = useRef<number[]>([]);
 
@@ -267,7 +268,15 @@ export default function CatalogPage({ initialData, initialError = false }: { ini
                   </label>)}
                 </div>
               </details>}
-              {activeSpecifications.map((specification) => {
+              {activeSpecifications.length > 0 && <button
+                className={CatalogPageStyles["catalog-page__show-filters"]}
+                type="button"
+                aria-expanded={allFiltersOpen}
+                onClick={() => setAllFiltersOpen((open) => !open)}
+              >
+                {allFiltersOpen ? 'Скрыть фильтры' : `Показать все фильтры (${activeSpecifications.length})`}
+              </button>}
+              {allFiltersOpen && activeSpecifications.map((specification) => {
                 const values = [...new Set(categoryProducts.flatMap((product) => valuesOf(product, specification.title).map(String)))].sort((a, b) => a.localeCompare(b, 'ru', { numeric: true }));
                 const selectedRange = ranges[specification.title];
                 const selectedCount = (selectedValues[specification.title]?.length || 0) + Number(Boolean(selectedRange?.min)) + Number(Boolean(selectedRange?.max));

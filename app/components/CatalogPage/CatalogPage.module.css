@@ -186,6 +186,28 @@
   border-bottom: 1px solid #e7eaf0;
 }
 
+.catalog-page__show-filters {
+  width: 100%;
+  padding: 14px 18px;
+  border: 0;
+  border-bottom: 1px solid #e7eaf0;
+  background: #fff;
+  color: var(--blue);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.catalog-page__show-filters:hover {
+  background: #f7f8fb;
+}
+
+.catalog-page__show-filters:focus-visible {
+  outline: 3px solid #8895d4;
+  outline-offset: -3px;
+}
+
 .catalog-page__filter-group:last-child {
   border-bottom: 0;
 }
