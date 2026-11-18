@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "app/admin/admin.css"
+        ],
+        "createdAt": "2026-11-08T20:07:28.606Z",
+        "reason": "False positive: .editor-help is a contextual guidance paragraph, not a card; its subtle left accent distinguishes the note from editable fields."
+      }
+    ]
+  }
+}

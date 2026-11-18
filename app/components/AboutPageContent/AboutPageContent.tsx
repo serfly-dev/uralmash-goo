@@ -47,7 +47,6 @@ export default function AboutPageContent({ featuredProducts, categories, works, 
           <section className={"about-hero"} aria-labelledby="about-heading">
             <div className={AboutPageContentStyles["about-hero__copy"]}>
               <h1 id="about-heading"><span data-about-title-line>О компании</span></h1>
-              <p data-about-intro>ООО «Уралмаш ГОО» зарегистрировано 4 декабря 2024 года и работает в Екатеринбурге.</p>
             </div>
 
             <figure className={AboutPageContentStyles["about-hero__stage"]}>
