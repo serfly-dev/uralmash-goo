@@ -11,7 +11,8 @@ function isLoopbackHost(host) {
   return value === 'localhost' || value === '::1' || (isIP(value) === 4 && Number(value.split('.')[0]) === 127);
 }
 
-export default async function AdminPage() {
+export default async function AdminPage({ searchParams, productId = null }) {
+  const query = await searchParams;
   const cookieStore = await cookies();
   const adminSession = cookieStore.get('uralgoo_admin');
   const cookieHeader = adminSession ? `uralgoo_admin=${encodeURIComponent(adminSession.value)}` : '';
@@ -34,5 +35,5 @@ export default async function AdminPage() {
     if (error?.digest?.startsWith('NEXT_REDIRECT')) throw error;
     redirect('/admin/login');
   }
-  return <AdminDashboard username={account.username} />;
+  return <AdminDashboard username={account.username} productId={productId} initialSection={query?.section} />;
 }

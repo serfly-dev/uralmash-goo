@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { adminApi, apiOrigin, authApi } from '../lib/api';
 import PasswordInput from './PasswordInput';
 
@@ -50,6 +50,13 @@ function mediaSource(url) {
   return url && url.startsWith('/') ? apiOrigin + url : url;
 }
 
+function ProductThumbnail({ product }) {
+  const [failed, setFailed] = useState(false);
+  const media = [...(product.payload?.media || []), ...(product.payload?.variants || []).flatMap((variant) => variant.media || [])];
+  const image = media.map((item) => typeof item === 'string' ? item : item?.url).find((url) => url && !/\.(mp4|webm)(?:[?#]|$)/i.test(url));
+  return <span className="catalog-product__image">{image && !failed ? <img src={mediaSource(image)} alt="" loading="lazy" onError={() => setFailed(true)} /> : <span>Нет фото</span>}</span>;
+}
+
 function formatSize(bytes) {
   return bytes < 1024 * 1024 ? Math.max(1, Math.round(bytes / 1024)) + ' КБ' : (bytes / 1024 / 1024).toFixed(1) + ' МБ';
 }
@@ -86,6 +93,7 @@ function ExpandableList({ items, renderItem, className = '', compact = true }) {
 
 function MediaSelector({ label, help, mediaFiles, value, onChange, onUpload, onDeleteMedia, singleImage = false, compactLists = false }) {
   const [uploading, setUploading] = useState(false);
+  const selectorId = useId();
   const selected = Array.isArray(value) ? value.map((item) => typeof item === 'string' ? item : item?.url).filter(Boolean) : [];
   const unlisted = selected.filter((url) => !mediaFiles.some((file) => file.url === url));
   const availableFiles = singleImage ? mediaFiles.filter((file) => file.type.startsWith('image/')) : mediaFiles;
@@ -115,7 +123,7 @@ function MediaSelector({ label, help, mediaFiles, value, onChange, onUpload, onD
       return (
         <div className={'media-option' + (checked ? ' is-selected' : '')} key={file.id}>
           <input
-            id={`media-option-${file.id}`}
+            id={`${selectorId}-media-option-${file.id}`}
             className="media-option__check"
             type="checkbox"
             checked={checked}
@@ -123,7 +131,7 @@ function MediaSelector({ label, help, mediaFiles, value, onChange, onUpload, onD
               ? (event.target.checked ? [file.url] : [])
               : (event.target.checked ? [...selected, file.url] : selected.filter((url) => url !== file.url)))}
           />
-          <label className="media-option__label" htmlFor={`media-option-${file.id}`}>
+          <label className="media-option__label" htmlFor={`${selectorId}-media-option-${file.id}`}>
             <span className="media-option__preview">
               {isVideo ? <span className="media-option__video">▶ Видео</span> : <img src={mediaSource(file.url)} alt="" loading="lazy" />}
             </span>
@@ -162,7 +170,21 @@ function MediaSelector({ label, help, mediaFiles, value, onChange, onUpload, onD
         </label>
         <small>{singleImage ? 'JPG, PNG или WebP · до 25 МБ; фото автоматически приводится к WebP' : 'JPG, PNG, WebP до 25 МБ; MP4 и WebM до 100 МБ'}</small>
       </div>
-      {availableFiles.length || unlisted.length ? (
+      {compactLists && (availableFiles.length || unlisted.length) ? (
+        <>
+          {selected.length > 0 && <ExpandableList
+            className="media-grid"
+            items={[...availableFiles.filter((file) => selected.includes(file.url)).map((file) => ({ file })), ...unlisted.map((url) => ({ url }))]}
+            renderItem={renderMediaOption}
+          />}
+          {availableFiles.some((file) => !selected.includes(file.url)) && <details className="expandable-list__more">
+            <summary>Показать остальные файлы ({availableFiles.filter((file) => !selected.includes(file.url)).length})</summary>
+            <div className="media-grid expandable-list__items">
+              {availableFiles.filter((file) => !selected.includes(file.url)).map((file) => renderMediaOption({ file }))}
+            </div>
+          </details>}
+        </>
+      ) : availableFiles.length || unlisted.length ? (
         <ExpandableList
           className="media-grid"
           items={[...availableFiles.map((file) => ({ file })), ...unlisted.map((url) => ({ url }))]}
@@ -549,8 +571,9 @@ function PrivacyPolicySettings() {
   </form>;
 }
 
-export default function AdminDashboard({ username }) {
-  const [section, setSection] = useState('products');
+export default function AdminDashboard({ username, productId = null, initialSection }) {
+  const [section, setSection] = useState(modules.some(([id]) => id === initialSection) || ['overview', 'username', 'password'].includes(initialSection) ? initialSection : 'products');
+  const [productSearch, setProductSearch] = useState('');
   const [rows, setRows] = useState([]);
   const [edit, setEdit] = useState(null);
   const [error, setError] = useState('');
@@ -576,6 +599,11 @@ export default function AdminDashboard({ username }) {
       if (section === 'requests') setReqs(data);
       else {
         setRows(data);
+        if (section === 'products' && productId) {
+          const row = data.find((item) => String(item.id) === productId);
+          if (productId === 'new' || row) open(row || null);
+          else setError('Товар не найден.');
+        }
         if (section === 'contacts') {
           const row = data.find((item) => item.id === contactId) || data[0];
           setEdit(row
@@ -657,6 +685,10 @@ export default function AdminDashboard({ username }) {
   }
 
   function open(row, parentId = null) {
+    if (section === 'products' && !productId) {
+      location.assign('/admin/products/' + (row?.id || 'new'));
+      return;
+    }
     setError('');
     setNotice('');
     scrollEditorOnOpen.current = true;
@@ -708,6 +740,10 @@ export default function AdminDashboard({ username }) {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Не удалось сохранить запись.');
       setNotice('Изменения сохранены.');
+      if (section === 'products' && productId) {
+        location.assign('/admin?section=products');
+        return;
+      }
       if (section !== 'contacts') setEdit(null);
       load(section === 'contacts' ? edit.id : null);
     } catch (saveError) {
@@ -778,6 +814,17 @@ export default function AdminDashboard({ username }) {
 
   const current = section === 'username' ? 'Смена логина' : section === 'password' ? 'Смена пароля' : modules.find(([id]) => id === section)?.[1] || 'Обзор';
   const isCreating = edit && !edit.id;
+  const productEditor = section === 'products' && Boolean(productId);
+  const visibleRows = rows.filter((row) => (section !== 'categories' || !row.payload?.parentId)
+    && (section !== 'products' || row.title.toLocaleLowerCase('ru').includes(productSearch.trim().toLocaleLowerCase('ru'))));
+  function selectSection(id) {
+    if (productId) location.assign('/admin?section=' + encodeURIComponent(id));
+    else setSection(id);
+  }
+  function closeEditor() {
+    if (productEditor) location.assign('/admin?section=products');
+    else setEdit(null);
+  }
 
   return (
     <div className="admin-frame">
@@ -788,10 +835,10 @@ export default function AdminDashboard({ username }) {
         </a>
         <p className="nav-caption">Управление сайтом</p>
         <nav className="admin-nav" aria-label="Разделы админ-панели">
-          <button className={'nav-item' + (section === 'overview' ? ' active' : '')} onClick={() => setSection('overview')}>Обзор</button>
-          {modules.map(([id, label]) => <button key={id} className={'nav-item' + (section === id ? ' active' : '')} onClick={() => setSection(id)}>{label}</button>)}
-          <button className={'nav-item' + (section === 'username' ? ' active' : '')} onClick={() => setSection('username')}>Смена логина</button>
-          <button className={'nav-item' + (section === 'password' ? ' active' : '')} onClick={() => setSection('password')}>Смена пароля</button>
+          <button className={'nav-item' + (section === 'overview' ? ' active' : '')} onClick={() => selectSection('overview')}>Обзор</button>
+          {modules.map(([id, label]) => <button key={id} className={'nav-item' + (section === id ? ' active' : '')} onClick={() => selectSection(id)}>{label}</button>)}
+          <button className={'nav-item' + (section === 'username' ? ' active' : '')} onClick={() => selectSection('username')}>Смена логина</button>
+          <button className={'nav-item' + (section === 'password' ? ' active' : '')} onClick={() => selectSection('password')}>Смена пароля</button>
         </nav>
         <div className="sidebar-bottom"><span className="status-light" />Доступ: {username}</div>
       </aside>
@@ -806,10 +853,10 @@ export default function AdminDashboard({ username }) {
           <div className="page-heading">
             <div>
               <p className="admin-eyebrow">Управление сайтом</p>
-              <h1>{current}</h1>
-              <p>{section === 'username' ? 'Подтверждение по почте и смена логина администратора.' : section === 'password' ? 'Подтверждение по почте и смена пароля администратора.' : section === 'overview' ? 'Разделы для управления сайтом.' : section === 'requests' ? 'В заявках указаны тема обращения и страница, с которой его отправили.' : section === 'contacts' ? 'Контактные данные на сайте.' : 'Записи раздела «' + current + '».'}</p>
+              <h1>{productEditor ? (productId === 'new' ? 'Новый товар' : 'Редактирование товара') : current}</h1>
+              <p>{productEditor ? 'Данные товара и его варианты.' : section === 'username' ? 'Подтверждение по почте и смена логина администратора.' : section === 'password' ? 'Подтверждение по почте и смена пароля администратора.' : section === 'overview' ? 'Разделы для управления сайтом.' : section === 'requests' ? 'В заявках указаны тема обращения и страница, с которой его отправили.' : section === 'contacts' ? 'Контактные данные на сайте.' : 'Записи раздела «' + current + '».'}</p>
             </div>
-            {editable.includes(section) && section !== 'contacts' && <button className="admin-primary add-button" onClick={() => open(null)}>Добавить запись</button>}
+            {productEditor ? <a className="catalog-back" href="/admin?section=products">← К каталогу</a> : editable.includes(section) && section !== 'contacts' && <button className="admin-primary add-button" onClick={() => open(null)}>Добавить запись</button>}
           </div>
 
           {error && <div className="form-error admin-message" role="alert">{error}</div>}
@@ -835,7 +882,7 @@ export default function AdminDashboard({ username }) {
             <form className="editor-card" onSubmit={save} ref={editorRef}>
               <div className="editor-card__heading">
                 <div><h2>{section === 'contacts' ? 'Контактные данные' : isCreating ? 'Новая запись' : 'Редактирование'}</h2>{section !== 'contacts' && <p>Поля со звёздочкой обязательны.</p>}</div>
-                {section !== 'contacts' && <button type="button" onClick={() => setEdit(null)}>Закрыть</button>}
+                {section !== 'contacts' && <button type="button" onClick={closeEditor}>{productEditor ? 'К каталогу' : 'Закрыть'}</button>}
               </div>
               {section !== 'contacts' && <section className="editor-group">
                 <div className="editor-group__title"><h3>Основное</h3><p>Заголовок и адрес страницы записи.</p></div>
@@ -883,7 +930,7 @@ export default function AdminDashboard({ username }) {
 
               <div className="editor-actions">
                 <button className="admin-primary" disabled={busy || uploading}>{busy ? 'Сохраняем…' : uploading ? 'Загружается файл…' : 'Сохранить'}</button>
-                {section !== 'contacts' && <button type="button" onClick={() => setEdit(null)}>Отмена</button>}
+                {section !== 'contacts' && <button type="button" onClick={closeEditor}>Отмена</button>}
               </div>
             </form>
           )}
@@ -919,14 +966,16 @@ export default function AdminDashboard({ username }) {
             </>
           )}
 
-          {editable.includes(section) && section !== 'contacts' && (
-            <div className="table-wrap table-wrap--content-list">
+          {editable.includes(section) && section !== 'contacts' && !productEditor && (
+            <>
+            {section === 'products' && <label className="catalog-search"><span>Поиск по товарам</span><input type="search" value={productSearch} onChange={(event) => setProductSearch(event.target.value)} placeholder="Название товара" /></label>}
+            <div className={'table-wrap table-wrap--content-list' + (section === 'products' ? ' catalog-list' : '')}>
               <table>
                 <thead><tr><th>Название</th><th>Адрес</th><th>Статус</th><th>Действия</th></tr></thead>
                 <tbody>
-                  {rows.filter((row) => section !== 'categories' || !row.payload?.parentId).map((row) => (
+                  {visibleRows.map((row) => (
                     <tr key={row.id}>
-                      <td className="table-wrap__content-title" title={row.title}>{row.title}</td>
+                      <td className="table-wrap__content-title" title={row.title}>{section === 'products' ? <div className="catalog-product"><ProductThumbnail product={row} /><span>{row.title}</span></div> : row.title}</td>
                       <td><code>{row.slug}</code></td>
                       <td>{row.published ? 'Опубликовано' : 'Черновик'}</td>
                       <td><button type="button" onClick={() => open(row)}>Изменить</button><button type="button" onClick={() => remove(row)}>Удалить</button></td>
@@ -934,8 +983,9 @@ export default function AdminDashboard({ username }) {
                   ))}
                 </tbody>
               </table>
-              {!rows.length && <p className="empty-state">Записей пока нет. Добавьте первую.</p>}
+              {!visibleRows.length && <p className="empty-state">{rows.length && section === 'products' && productSearch.trim() ? 'Товары не найдены.' : 'Записей пока нет. Добавьте первую.'}</p>}
             </div>
+            </>
           )}
         </div>
       </main>
